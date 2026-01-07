@@ -14,6 +14,7 @@
   languages.rust = {
     enable = true;
     channel = "stable";
+    version = "1.91.1";
   };
 
   env = {
@@ -59,10 +60,5 @@
     audit.exec = ''
       cargo audit
     '';
-  };
-
-  git-hooks.hooks = {
-    rustfmt.enable = true;
-    clippy.enable = true;
   };
 }
