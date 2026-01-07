@@ -207,18 +207,23 @@ async fn handle_scheme(
         None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response(),
     };
 
+    let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response(),
+    };
+
     let wants_json = query.format.as_deref() == Some("json")
         || headers.get("accept")
             .and_then(|v| v.to_str().ok())
             .map(|v| v.contains("application/json"))
             .unwrap_or(false);
 
-    if wants_json {
-        let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
-            Ok(s) => s,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response(),
-        };
+    let wants_html = headers.get("accept")
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("text/html"))
+        .unwrap_or(false);
 
+    if wants_json {
         let scheme_data: SchemeYaml = match serde_yaml::from_str(&scheme_yaml_str) {
             Ok(d) => d,
             Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
@@ -235,6 +240,102 @@ async fn handle_scheme(
             .header("x-scheme-system", &scheme_info.system)
             .body(Body::from(json))
             .unwrap()
+    } else if wants_html {
+        let scheme_data: SchemeYaml = match serde_yaml::from_str(&scheme_yaml_str) {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
+        };
+
+        let bg = scheme_data.palette.get("base00").cloned().unwrap_or_else(|| "#000000".to_string()).trim_start_matches('#').to_string();
+        let fg = scheme_data.palette.get("base05").cloned().unwrap_or_else(|| "#ffffff".to_string()).trim_start_matches('#').to_string();
+        let comment = scheme_data.palette.get("base03").cloned().unwrap_or_else(|| "#888888".to_string()).trim_start_matches('#').to_string();
+        let keyword = scheme_data.palette.get("base0E").cloned().unwrap_or_else(|| "#aa88ff".to_string()).trim_start_matches('#').to_string();
+        let string = scheme_data.palette.get("base0B").cloned().unwrap_or_else(|| "#88ff88".to_string()).trim_start_matches('#').to_string();
+        let function = scheme_data.palette.get("base0D").cloned().unwrap_or_else(|| "#8888ff".to_string()).trim_start_matches('#').to_string();
+        let number = scheme_data.palette.get("base09").cloned().unwrap_or_else(|| "#ffaa88".to_string()).trim_start_matches('#').to_string();
+
+        let html = format!(r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{} - base16.sh</title>
+    <style>
+        body {{ font-family: monospace; background: #{}; color: #{}; padding: 20px; }}
+        h1 {{ text-align: center; }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        .code-examples {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 40px 0; }}
+        .code-block {{ border: 1px solid #{}; padding: 15px; }}
+        .lang-label {{ font-size: 12px; color: #{}; margin-bottom: 5px; }}
+        pre {{ margin: 0; font-size: 12px; line-height: 1.4; overflow-x: auto; }}
+        .yaml-section {{ margin-top: 40px; }}
+        .yaml-section h2 {{ color: #{}; }}
+        .yaml-container {{ background: #{}; border: 1px solid #{}; padding: 15px; position: relative; }}
+        .copy-btn {{ position: absolute; top: 10px; right: 10px; background: #{}; color: #{}; border: 1px solid #{}; padding: 5px 10px; cursor: pointer; }}
+        .copy-btn:hover {{ background: #{}; }}
+        .back-link {{ text-align: center; margin: 20px 0; }}
+        .back-link a {{ color: #{}; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="back-link"><a href="/">← Back to all themes</a></div>
+        <h1>{} ({})</h1>
+        <p style="text-align: center; color: #{}">{}</p>
+
+        <div class="code-examples">
+            <div class="code-block">
+                <div class="lang-label">Clojure</div>
+                <pre><span style="color: #{}">;; Calculate factorial</span>
+<span style="color: #{}">(<span style="color: #{}">(defn</span> factorial [n]</span>
+  <span style="color: #{}">(if</span> (<span style="color: #{}"><=</span> n <span style="color: #{}"1</span>)
+    <span style="color: #{}"1</span>
+    (<span style="color: #{}">*</span> n (factorial (<span style="color: #{}">-</span> n <span style="color: #{}"1</span>))))))</pre>
+            </div>
+            <div class="code-block">
+                <div class="lang-label">HTML</div>
+                <pre><span style="color: #{}">&lt;!-- Page header --&gt;</span>
+<span style="color: #{}">&lt;<span style="color: #{}"div</span> <span style="color: #{}"class</span>=<span style="color: #{}">\"container\"</span>&gt;</span>
+  <span style="color: #{}">&lt;<span style="color: #{}"h1</span>&gt;</span>Hello World<span style="color: #{}">&lt;/<span style="color: #{}"h1</span>&gt;</span>
+  <span style="color: #{}">&lt;<span style="color: #{}"p</span>&gt;</span>Welcome!<span style="color: #{}">&lt;/<span style="color: #{}"p</span>&gt;</span>
+<span style="color: #{}">&lt;/<span style="color: #{}"div</span>&gt;</span></pre>
+            </div>
+            <div class="code-block">
+                <div class="lang-label">Rust</div>
+                <pre><span style="color: #{}">// Fibonacci function</span>
+<span style="color: #{}"fn</span> <span style="color: #{}"fib</span>(n: <span style="color: #{}"u32</span>) -&gt; <span style="color: #{}"u32</span> {{
+    <span style="color: #{}"match</span> n {{
+        <span style="color: #{}"0</span> | <span style="color: #{}"1</span> =&gt; n,
+        _ =&gt; <span style="color: #{}"fib</span>(n - <span style="color: #{}"1</span>) + <span style="color: #{}"fib</span>(n - <span style="color: #{}"2</span>),
+    }}
+}}</pre>
+            </div>
+        </div>
+
+        <div class="yaml-section">
+            <h2>Scheme YAML</h2>
+            <div class="yaml-container">
+                <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('yaml').textContent)">Copy</button>
+                <pre id="yaml">{}</pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"#,
+            scheme_data.name, bg, fg, comment, comment, fg, bg, comment, bg, fg, comment, bg, function,
+            scheme_data.name, scheme_info.system, comment, scheme_data.author,
+            comment, fg, keyword, keyword, function, number, number, function, function, number,
+            comment, fg, keyword, keyword, string, fg, keyword, fg, keyword, fg, keyword, fg, keyword, fg, keyword,
+            comment, keyword, function, keyword, keyword, keyword, number, number, function, number, function, number,
+            scheme_yaml_str
+        );
+
+        Response::builder()
+            .header("content-type", "text/html; charset=utf-8")
+            .header("x-scheme-name", &scheme_info.name)
+            .header("x-scheme-system", &scheme_info.system)
+            .body(Body::from(html))
+            .unwrap()
     } else {
         match File::open(&scheme_info.path).await {
             Ok(file) => {
@@ -250,6 +351,45 @@ async fn handle_scheme(
             Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response()
         }
     }
+}
+
+async fn handle_index() -> Response {
+    let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
+    schemes.sort();
+
+    let mut html = String::from(r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>base16.sh - All Themes</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; }
+        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 40px; }
+        .schemes a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
+        .schemes a:hover { background: #333; }
+    </style>
+</head>
+<body>
+    <h1>base16.sh - All Themes (441)</h1>
+    <p style="text-align: center;">Click any theme to see preview with code examples</p>
+    <div class="schemes">
+"#);
+
+    for scheme in &schemes {
+        html.push_str(&format!(r#"        <a href="/{}">{}</a>
+"#, scheme, scheme));
+    }
+
+    html.push_str(r#"    </div>
+</body>
+</html>
+"#);
+
+    Response::builder()
+        .header("content-type", "text/html; charset=utf-8")
+        .body(Body::from(html))
+        .unwrap()
 }
 
 async fn handle_help(
@@ -390,7 +530,7 @@ async fn main() {
     Lazy::force(&TEMPLATE_INDEX);
 
     let app = Router::new()
-        .route("/", get(|| async { "base16.sh server" }))
+        .route("/", get(handle_index))
         .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme));
