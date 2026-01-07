@@ -254,6 +254,55 @@ async fn handle_scheme(
         let function = scheme_data.palette.get("base0D").cloned().unwrap_or_else(|| "#8888ff".to_string()).trim_start_matches('#').to_string();
         let number = scheme_data.palette.get("base09").cloned().unwrap_or_else(|| "#ffaa88".to_string()).trim_start_matches('#').to_string();
 
+        // Build color palette SVG
+        let mut palette_svg = String::from(r#"<svg width="320" height="40" xmlns="http://www.w3.org/2000/svg">"#);
+        for i in 0..16 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            palette_svg.push_str(&format!(r#"<rect x="{}" y="0" width="20" height="40" fill="{}"/>"#, i * 20, color));
+        }
+        palette_svg.push_str("</svg>");
+
+        fn html_escape(s: &str) -> String {
+            s.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+        }
+
+        // Generate highlighted Clojure
+        let clojure_highlighted = format!(
+            r#"<span style="color: #{}">;; Calculate factorial recursively</span>
+(<span style="color: #{}"defn</span> factorial [n]
+  (<span style="color: #{}"if</span> (<span style="color: #{}"&lt;=</span> n <span style="color: #{}"1</span>)
+    <span style="color: #{}"1</span>
+    (<span style="color: #{}"*</span> n (factorial (<span style="color: #{}"dec</span> n)))))"#,
+            comment, keyword, keyword, function, number, number, function, function
+        );
+
+        // Generate highlighted HTML
+        let html_highlighted = format!(
+            r#"<span style="color: #{}">&lt;!-- Page header --&gt;</span>
+&lt;<span style="color: #{}"div</span> <span style="color: #{}"class</span>=<span style="color: #{}">"container"</span>&gt;
+  &lt;<span style="color: #{}"h1</span>&gt;Hello World&lt;/<span style="color: #{}"h1</span>&gt;
+  &lt;<span style="color: #{}"p</span>&gt;Welcome to our site!&lt;/<span style="color: #{}"p</span>&gt;
+&lt;/<span style="color: #{}"div</span>&gt;"#,
+            comment, keyword, keyword, string, keyword, keyword, keyword, keyword, keyword
+        );
+
+        // Generate highlighted Rust
+        let rust_highlighted = format!(
+            r#"<span style="color: #{}">//Calculate fibonacci recursively</span>
+<span style="color: #{}"fn</span> <span style="color: #{}"fib</span>(n: <span style="color: #{}"u64</span>) -&gt; <span style="color: #{}"u64</span> {{
+    <span style="color: #{}"match</span> n {{
+        <span style="color: #{}"0</span> | <span style="color: #{}"1</span> =&gt; n,
+        _ =&gt; <span style="color: #{}"fib</span>(n - <span style="color: #{}"1</span>) + <span style="color: #{}"fib</span>(n - <span style="color: #{}"2</span>),
+    }}
+}}"#,
+            comment, keyword, function, keyword, keyword, keyword, number, number, function, number, function, number
+        );
+
         let html = format!(r#"<!DOCTYPE html>
 <html>
 <head>
@@ -263,6 +312,7 @@ async fn handle_scheme(
         body {{ font-family: monospace; background: #{}; color: #{}; padding: 20px; }}
         h1 {{ text-align: center; }}
         .container {{ max-width: 1200px; margin: 0 auto; }}
+        .palette {{ text-align: center; margin: 20px 0; }}
         .code-examples {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 40px 0; }}
         .code-block {{ border: 1px solid #{}; padding: 15px; }}
         .lang-label {{ font-size: 12px; color: #{}; margin-bottom: 5px; }}
@@ -281,33 +331,20 @@ async fn handle_scheme(
         <div class="back-link"><a href="/">← Back to all themes</a></div>
         <h1>{} ({})</h1>
         <p style="text-align: center; color: #{}">{}</p>
+        <div class="palette">{}</div>
 
         <div class="code-examples">
             <div class="code-block">
                 <div class="lang-label">Clojure</div>
-                <pre><span style="color: #{}">;; Calculate factorial</span>
-<span style="color: #{}">(<span style="color: #{}">(defn</span> factorial [n]</span>
-  <span style="color: #{}">(if</span> (<span style="color: #{}"><=</span> n <span style="color: #{}"1</span>)
-    <span style="color: #{}"1</span>
-    (<span style="color: #{}">*</span> n (factorial (<span style="color: #{}">-</span> n <span style="color: #{}"1</span>))))))</pre>
+                <pre>{}</pre>
             </div>
             <div class="code-block">
                 <div class="lang-label">HTML</div>
-                <pre><span style="color: #{}">&lt;!-- Page header --&gt;</span>
-<span style="color: #{}">&lt;<span style="color: #{}"div</span> <span style="color: #{}"class</span>=<span style="color: #{}">\"container\"</span>&gt;</span>
-  <span style="color: #{}">&lt;<span style="color: #{}"h1</span>&gt;</span>Hello World<span style="color: #{}">&lt;/<span style="color: #{}"h1</span>&gt;</span>
-  <span style="color: #{}">&lt;<span style="color: #{}"p</span>&gt;</span>Welcome!<span style="color: #{}">&lt;/<span style="color: #{}"p</span>&gt;</span>
-<span style="color: #{}">&lt;/<span style="color: #{}"div</span>&gt;</span></pre>
+                <pre>{}</pre>
             </div>
             <div class="code-block">
                 <div class="lang-label">Rust</div>
-                <pre><span style="color: #{}">// Fibonacci function</span>
-<span style="color: #{}"fn</span> <span style="color: #{}"fib</span>(n: <span style="color: #{}"u32</span>) -&gt; <span style="color: #{}"u32</span> {{
-    <span style="color: #{}"match</span> n {{
-        <span style="color: #{}"0</span> | <span style="color: #{}"1</span> =&gt; n,
-        _ =&gt; <span style="color: #{}"fib</span>(n - <span style="color: #{}"1</span>) + <span style="color: #{}"fib</span>(n - <span style="color: #{}"2</span>),
-    }}
-}}</pre>
+                <pre>{}</pre>
             </div>
         </div>
 
@@ -323,10 +360,10 @@ async fn handle_scheme(
 </html>
 "#,
             scheme_data.name, bg, fg, comment, comment, fg, bg, comment, bg, fg, comment, bg, function,
-            scheme_data.name, scheme_info.system, comment, scheme_data.author,
-            comment, fg, keyword, keyword, function, number, number, function, function, number,
-            comment, fg, keyword, keyword, string, fg, keyword, fg, keyword, fg, keyword, fg, keyword, fg, keyword,
-            comment, keyword, function, keyword, keyword, keyword, number, number, function, number, function, number,
+            scheme_data.name, scheme_info.system, comment, scheme_data.author, palette_svg,
+            clojure_highlighted,
+            html_highlighted,
+            rust_highlighted,
             scheme_yaml_str
         );
 
@@ -354,8 +391,8 @@ async fn handle_scheme(
 }
 
 async fn handle_index() -> Response {
-    let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
-    schemes.sort();
+    let mut schemes: Vec<(&String, &SchemeInfo)> = SCHEME_INDEX.schemes.iter().collect();
+    schemes.sort_by_key(|(name, _)| *name);
 
     let mut html = String::from(r#"<!DOCTYPE html>
 <html>
@@ -365,9 +402,11 @@ async fn handle_index() -> Response {
     <style>
         body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
         h1 { text-align: center; }
-        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 40px; }
-        .schemes a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
-        .schemes a:hover { background: #333; }
+        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 40px; }
+        .scheme-card { border: 1px solid #333; padding: 10px; display: block; text-decoration: none; }
+        .scheme-card:hover { background: #333; }
+        .scheme-name { color: #6a9fb5; margin-bottom: 5px; }
+        .scheme-palette { margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -376,9 +415,25 @@ async fn handle_index() -> Response {
     <div class="schemes">
 "#);
 
-    for scheme in &schemes {
-        html.push_str(&format!(r#"        <a href="/{}">{}</a>
-"#, scheme, scheme));
+    for (name, info) in &schemes {
+        if let Ok(yaml_str) = std::fs::read_to_string(&info.path) {
+            if let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
+                let mut palette_svg = String::from(r#"<svg width="230" height="20" xmlns="http://www.w3.org/2000/svg">"#);
+                for i in 0..16 {
+                    let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                        .cloned()
+                        .unwrap_or_else(|| "#000000".to_string());
+                    palette_svg.push_str(&format!(r#"<rect x="{}" y="0" width="14" height="20" fill="{}"/>"#, i * 14, color));
+                }
+                palette_svg.push_str("</svg>");
+
+                html.push_str(&format!(r#"        <a href="/{}" class="scheme-card">
+            <div class="scheme-name">{}</div>
+            <div class="scheme-palette">{}</div>
+        </a>
+"#, name, name, palette_svg));
+            }
+        }
     }
 
     html.push_str(r#"    </div>
