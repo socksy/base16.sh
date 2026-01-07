@@ -1,14 +1,14 @@
 use axum::{
     Router,
     routing::get,
-    extract::Path,
+    extract::{Path, Query},
     response::{IntoResponse, Response},
-    http::StatusCode,
+    http::{StatusCode, HeaderMap},
     body::Body,
 };
 use mustache::MapBuilder;
 use once_cell::sync::Lazy;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::fs::File;
@@ -147,15 +147,21 @@ impl TemplateIndex {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct SchemeYaml {
-    #[serde(default)]
-    _system: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    system: String,
     name: String,
     author: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     variant: String,
     palette: HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+struct FormatQuery {
+    #[serde(default)]
+    format: Option<String>,
 }
 
 fn sanitize_name(name: &str) -> String {
@@ -180,29 +186,63 @@ struct SchemeTemplatePath {
     template: String,
 }
 
-async fn handle_scheme(Path(SchemePath { scheme }): Path<SchemePath>) -> Response {
+async fn handle_scheme(
+    Path(SchemePath { scheme }): Path<SchemePath>,
+    Query(query): Query<FormatQuery>,
+    headers: HeaderMap,
+) -> Response {
     let scheme = sanitize_name(&scheme);
 
     let scheme_info = SCHEME_INDEX.find_exact(&scheme)
         .or_else(|| SCHEME_INDEX.find_fuzzy(&scheme, 0.8));
 
-    match scheme_info {
-        Some(info) => {
-            match File::open(&info.path).await {
-                Ok(file) => {
-                    let stream = ReaderStream::new(file);
-                    let body = Body::from_stream(stream);
-                    Response::builder()
-                        .header("content-type", "application/yaml")
-                        .header("x-scheme-name", &info.name)
-                        .header("x-scheme-system", &info.system)
-                        .body(body)
-                        .unwrap()
-                }
-                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response()
+    let scheme_info = match scheme_info {
+        Some(info) => info,
+        None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response(),
+    };
+
+    let wants_json = query.format.as_deref() == Some("json")
+        || headers.get("accept")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.contains("application/json"))
+            .unwrap_or(false);
+
+    if wants_json {
+        let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
+            Ok(s) => s,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response(),
+        };
+
+        let scheme_data: SchemeYaml = match serde_yaml::from_str(&scheme_yaml_str) {
+            Ok(d) => d,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
+        };
+
+        let json = match serde_json::to_string_pretty(&scheme_data) {
+            Ok(j) => j,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to serialize JSON").into_response(),
+        };
+
+        Response::builder()
+            .header("content-type", "application/json")
+            .header("x-scheme-name", &scheme_info.name)
+            .header("x-scheme-system", &scheme_info.system)
+            .body(Body::from(json))
+            .unwrap()
+    } else {
+        match File::open(&scheme_info.path).await {
+            Ok(file) => {
+                let stream = ReaderStream::new(file);
+                let body = Body::from_stream(stream);
+                Response::builder()
+                    .header("content-type", "application/yaml")
+                    .header("x-scheme-name", &scheme_info.name)
+                    .header("x-scheme-system", &scheme_info.system)
+                    .body(body)
+                    .unwrap()
             }
+            Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response()
         }
-        None => (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response()
     }
 }
 
