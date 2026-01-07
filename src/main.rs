@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
     body::Body,
 };
+use mustache::MapBuilder;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -15,6 +16,10 @@ use tokio_util::io::ReaderStream;
 
 static SCHEME_INDEX: Lazy<SchemeIndex> = Lazy::new(|| {
     SchemeIndex::load().expect("Failed to load scheme index")
+});
+
+static TEMPLATE_INDEX: Lazy<TemplateIndex> = Lazy::new(|| {
+    TemplateIndex::load().expect("Failed to load template index")
 });
 
 #[derive(Debug)]
@@ -84,11 +89,84 @@ impl SchemeIndex {
     }
 }
 
+#[derive(Debug)]
+struct TemplateInfo {
+    name: String,
+    path: String,
+    _repo: String,
+}
+
+struct TemplateIndex {
+    templates: HashMap<String, TemplateInfo>,
+}
+
+impl TemplateIndex {
+    fn load() -> std::io::Result<Self> {
+        let mut templates = HashMap::new();
+        let templates_dir = std::path::Path::new("data/templates");
+
+        if let Ok(entries) = std::fs::read_dir(templates_dir) {
+            for entry in entries.flatten() {
+                let repo_path = entry.path();
+                if !repo_path.is_dir() {
+                    continue;
+                }
+                let repo_name = repo_path.file_name().unwrap().to_str().unwrap();
+                let config_path = repo_path.join("templates/config.yaml");
+
+                if let Ok(config_str) = std::fs::read_to_string(&config_path) {
+                    if let Ok(config) = serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(&config_str) {
+                        for (template_name, _) in config.iter() {
+                            let mustache_file = format!("{}.mustache", template_name);
+                            let template_path = repo_path.join(format!("templates/{}", mustache_file));
+
+                            if template_path.exists() {
+                                let short_name = format!("{}-{}",
+                                    repo_name.trim_start_matches("base16-").trim_start_matches("base24-"),
+                                    template_name
+                                );
+                                templates.insert(short_name.clone(), TemplateInfo {
+                                    name: short_name.clone(),
+                                    path: template_path.to_string_lossy().to_string(),
+                                    _repo: repo_name.to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        tracing::info!("Loaded {} templates into index", templates.len());
+
+        Ok(TemplateIndex { templates })
+    }
+
+    fn find(&self, name: &str) -> Option<&TemplateInfo> {
+        self.templates.get(&name.to_lowercase())
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct SchemeYaml {
+    #[serde(default)]
+    _system: String,
+    name: String,
+    author: String,
+    #[serde(default)]
+    variant: String,
+    palette: HashMap<String, String>,
+}
+
 fn sanitize_name(name: &str) -> String {
     name.chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(255)
         .collect()
+}
+
+fn slugify(name: &str) -> String {
+    name.to_lowercase().replace(' ', "-")
 }
 
 #[derive(Deserialize)]
@@ -133,7 +211,80 @@ async fn handle_scheme_template(
 ) -> Response {
     let scheme = sanitize_name(&scheme);
     let template = sanitize_name(&template);
-    (StatusCode::NOT_IMPLEMENTED, format!("Template rendering not yet implemented: {}/{}", scheme, template)).into_response()
+
+    let scheme_info = SCHEME_INDEX.find_exact(&scheme)
+        .or_else(|| SCHEME_INDEX.find_fuzzy(&scheme, 0.8));
+
+    let scheme_info = match scheme_info {
+        Some(info) => info,
+        None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response(),
+    };
+
+    let template_info = match TEMPLATE_INDEX.find(&template) {
+        Some(info) => info,
+        None => return (StatusCode::NOT_FOUND, format!("Template '{}' not found", template)).into_response(),
+    };
+
+    let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read scheme file").into_response(),
+    };
+
+    let scheme_data: SchemeYaml = match serde_yaml::from_str(&scheme_yaml_str) {
+        Ok(d) => d,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
+    };
+
+    let template_str = match std::fs::read_to_string(&template_info.path) {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read template file").into_response(),
+    };
+
+    let template_compiled = match mustache::compile_str(&template_str) {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to compile template").into_response(),
+    };
+
+    let mut data = MapBuilder::new()
+        .insert_str("scheme-name", &scheme_data.name)
+        .insert_str("scheme-author", &scheme_data.author)
+        .insert_str("scheme-slug", slugify(&scheme_data.name))
+        .insert_str("scheme-system", &scheme_info.system);
+
+    if !scheme_data.variant.is_empty() {
+        data = data.insert_str("scheme-variant", &scheme_data.variant);
+    }
+
+    for (key, value) in &scheme_data.palette {
+        let hex_key = format!("{}-hex", key);
+        let hex_value = value.trim_start_matches('#');
+        data = data.insert_str(&hex_key, hex_value);
+
+        if hex_value.len() == 6 {
+            if let (Ok(r), Ok(g), Ok(b)) = (
+                u8::from_str_radix(&hex_value[0..2], 16),
+                u8::from_str_radix(&hex_value[2..4], 16),
+                u8::from_str_radix(&hex_value[4..6], 16),
+            ) {
+                data = data
+                    .insert_str(&format!("{}-rgb-r", key), r.to_string())
+                    .insert_str(&format!("{}-rgb-g", key), g.to_string())
+                    .insert_str(&format!("{}-rgb-b", key), b.to_string());
+            }
+        }
+    }
+
+    let rendered = match template_compiled.render_data_to_string(&data.build()) {
+        Ok(r) => r,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to render template").into_response(),
+    };
+
+    Response::builder()
+        .header("content-type", "text/plain; charset=utf-8")
+        .header("x-scheme-name", &scheme_info.name)
+        .header("x-template-name", &template_info.name)
+        .body(Body::from(rendered))
+        .unwrap()
 }
 
 #[tokio::main]
@@ -141,6 +292,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     Lazy::force(&SCHEME_INDEX);
+    Lazy::force(&TEMPLATE_INDEX);
 
     let app = Router::new()
         .route("/", get(|| async { "base16.sh server" }))
