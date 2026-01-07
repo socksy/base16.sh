@@ -164,6 +164,12 @@ struct FormatQuery {
     format: Option<String>,
 }
 
+#[derive(Serialize)]
+struct HelpResponse {
+    schemes: Vec<String>,
+    templates: Vec<String>,
+}
+
 fn sanitize_name(name: &str) -> String {
     name.chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
@@ -243,6 +249,55 @@ async fn handle_scheme(
             }
             Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read file").into_response()
         }
+    }
+}
+
+async fn handle_help(
+    Query(query): Query<FormatQuery>,
+    headers: HeaderMap,
+) -> Response {
+    let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
+    schemes.sort();
+
+    let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
+    templates.sort();
+
+    let help = HelpResponse { schemes, templates };
+
+    let wants_json = query.format.as_deref() == Some("json")
+        || headers.get("accept")
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.contains("application/json"))
+            .unwrap_or(false);
+
+    if wants_json {
+        let json = serde_json::to_string_pretty(&help).unwrap();
+        Response::builder()
+            .header("content-type", "application/json")
+            .body(Body::from(json))
+            .unwrap()
+    } else {
+        let mut text = String::from("base16.sh - Base16/Base24 Theme Server\n\n");
+
+        text.push_str("Usage:\n");
+        text.push_str("  GET /{scheme}              - get scheme YAML\n");
+        text.push_str("  GET /{scheme}?format=json  - get scheme JSON\n");
+        text.push_str("  GET /{scheme}/{template}   - render template\n");
+        text.push_str("  GET /--help                - this help\n\n");
+
+        text.push_str(&format!("Schemes ({})\n", help.schemes.len()));
+        for scheme in &help.schemes {
+            text.push_str(&format!("  {}\n", scheme));
+        }
+        text.push_str(&format!("\nTemplates ({})\n", help.templates.len()));
+        for template in &help.templates {
+            text.push_str(&format!("  {}\n", template));
+        }
+
+        Response::builder()
+            .header("content-type", "text/plain; charset=utf-8")
+            .body(Body::from(text))
+            .unwrap()
     }
 }
 
@@ -336,6 +391,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(|| async { "base16.sh server" }))
+        .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme));
 
