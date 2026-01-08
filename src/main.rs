@@ -121,10 +121,12 @@ impl TemplateIndex {
                             let template_path = repo_path.join(format!("templates/{}", mustache_file));
 
                             if template_path.exists() {
-                                let short_name = format!("{}-{}",
-                                    repo_name.trim_start_matches("base16-").trim_start_matches("base24-"),
-                                    template_name
-                                );
+                                // Use just the repo name without base16-/base24- prefix
+                                let short_name = repo_name
+                                    .trim_start_matches("base16-")
+                                    .trim_start_matches("base24-")
+                                    .to_string();
+
                                 templates.insert(short_name.clone(), TemplateInfo {
                                     name: short_name.clone(),
                                     path: template_path.to_string_lossy().to_string(),
@@ -394,6 +396,9 @@ async fn handle_index() -> Response {
     let mut schemes: Vec<(&String, &SchemeInfo)> = SCHEME_INDEX.schemes.iter().collect();
     schemes.sort_by_key(|(name, _)| *name);
 
+    let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
+    templates.sort();
+
     let mut html = String::from(r#"<!DOCTYPE html>
 <html>
 <head>
@@ -402,16 +407,23 @@ async fn handle_index() -> Response {
     <style>
         body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
         h1 { text-align: center; }
-        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 40px; }
+        h2 { color: #6a9fb5; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; }
+        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 20px; }
         .scheme-card { border: 1px solid #333; padding: 10px; display: block; text-decoration: none; }
         .scheme-card:hover { background: #333; }
         .scheme-name { color: #6a9fb5; margin-bottom: 5px; }
         .scheme-palette { margin-top: 5px; }
+        .templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
+        .templates a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
+        .templates a:hover { background: #333; }
     </style>
 </head>
 <body>
-    <h1>base16.sh - All Themes (441)</h1>
-    <p style="text-align: center;">Click any theme to see preview with code examples</p>
+    <h1>base16.sh</h1>
+    <p style="text-align: center;">Base16/Base24 theme server - <a href="/--help" style="color: #6a9fb5;">API docs</a></p>
+
+    <h2>Schemes (441)</h2>
+    <p>Click any theme to see preview with code examples</p>
     <div class="schemes">
 "#);
 
@@ -434,6 +446,18 @@ async fn handle_index() -> Response {
 "#, name, name, palette_svg));
             }
         }
+    }
+
+    html.push_str(r#"    </div>
+
+    <h2>Templates (31)</h2>
+    <p>Use with any scheme: /{scheme}/{template}</p>
+    <div class="templates">
+"#);
+
+    for template in &templates {
+        html.push_str(&format!(r#"        <a href="/monokai/{}">{}</a>
+"#, template, template));
     }
 
     html.push_str(r#"    </div>
