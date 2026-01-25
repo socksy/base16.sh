@@ -2,12 +2,14 @@ use axum::{
     Router,
     routing::get,
     extract::{Path, Query},
-    response::{IntoResponse, Response},
-    http::{StatusCode, HeaderMap},
+    response::{IntoResponse, Response, Redirect},
+    http::{StatusCode, HeaderMap, HeaderValue},
     body::Body,
 };
+use tower_http::set_header::SetResponseHeaderLayer;
 use mustache::MapBuilder;
 use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -46,7 +48,10 @@ impl SchemeIndex {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                            let name = stem.to_lowercase();
+                            let name = sanitize_name(&stem.to_lowercase());
+                            if name.is_empty() {
+                                continue;
+                            }
                             schemes.insert(name.clone(), SchemeInfo {
                                 name: name.clone(),
                                 path: path.to_string_lossy().to_string(),
@@ -116,19 +121,30 @@ impl TemplateIndex {
 
                 if let Ok(config_str) = std::fs::read_to_string(&config_path) {
                     if let Ok(config) = serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(&config_str) {
+                        let short_repo = sanitize_name(
+                            repo_name
+                                .trim_start_matches("base16-")
+                                .trim_start_matches("base24-")
+                        );
+                        if short_repo.is_empty() {
+                            continue;
+                        }
+
+                        let template_count = config.len();
+
                         for (template_name, _) in config.iter() {
                             let mustache_file = format!("{}.mustache", template_name);
                             let template_path = repo_path.join(format!("templates/{}", mustache_file));
 
                             if template_path.exists() {
-                                // Use just the repo name without base16-/base24- prefix
-                                let short_name = repo_name
-                                    .trim_start_matches("base16-")
-                                    .trim_start_matches("base24-")
-                                    .to_string();
+                                let key = if template_count == 1 || template_name == "default" {
+                                    short_repo.clone()
+                                } else {
+                                    format!("{}-{}", short_repo, template_name)
+                                };
 
-                                templates.insert(short_name.clone(), TemplateInfo {
-                                    name: short_name.clone(),
+                                templates.insert(key.clone(), TemplateInfo {
+                                    name: key,
                                     path: template_path.to_string_lossy().to_string(),
                                     _repo: repo_name.to_string(),
                                 });
@@ -183,6 +199,63 @@ fn slugify(name: &str) -> String {
     name.to_lowercase().replace(' ', "-")
 }
 
+fn get_base_description(base: &str) -> Option<&'static str> {
+    match base {
+        "base00" => Some("Default Background"),
+        "base01" => Some("Lighter Background (status bars, line numbers)"),
+        "base02" => Some("Selection Background"),
+        "base03" => Some("Comments, Invisibles, Line Highlighting"),
+        "base04" => Some("Dark Foreground (status bars)"),
+        "base05" => Some("Default Foreground, Caret, Delimiters, Operators"),
+        "base06" => Some("Light Foreground"),
+        "base07" => Some("Lightest Foreground"),
+        "base08" => Some("Variables, XML Tags, Markup Link Text, Diff Deleted"),
+        "base09" => Some("Integers, Booleans, Constants, XML Attributes"),
+        "base0A" | "base0a" => Some("Classes, Markup Bold, Search Text Background"),
+        "base0B" | "base0b" => Some("Strings, Inherited Class, Markup Code, Diff Inserted"),
+        "base0C" | "base0c" => Some("Support, Regular Expressions, Escape Characters"),
+        "base0D" | "base0d" => Some("Functions, Methods, Attribute IDs, Headings"),
+        "base0E" | "base0e" => Some("Keywords, Storage, Selector, Diff Changed"),
+        "base0F" | "base0f" => Some("Deprecated, Embedded Language Tags"),
+        "base10" => Some("Darker Background (Base24)"),
+        "base11" => Some("Darkest Background (Base24)"),
+        "base12" => Some("Bright Red (Base24)"),
+        "base13" => Some("Bright Yellow (Base24)"),
+        "base14" => Some("Bright Green (Base24)"),
+        "base15" => Some("Bright Cyan (Base24)"),
+        "base16" => Some("Bright Blue (Base24)"),
+        "base17" => Some("Bright Magenta (Base24)"),
+        _ => None,
+    }
+}
+
+fn colorize_yaml_hex_values(yaml: &str, fg_hex: &str) -> String {
+    let hex_pattern = Regex::new(r#"["']?(#[0-9A-Fa-f]{6})["']?"#).unwrap();
+    let base_pattern = Regex::new(r"^(\s*)(base[0-9A-Fa-f]{2}):").unwrap();
+
+    yaml.lines()
+        .map(|line| {
+            // First colorize hex values in the line
+            let colored_line = hex_pattern.replace_all(line, |caps: &regex::Captures| {
+                let full_match = caps.get(0).unwrap().as_str();
+                let hex_color = caps.get(1).unwrap().as_str();
+                format!(r#"<span class="hex-color" style="--fg: #{}; color: {};">{}</span>"#,
+                    fg_hex, hex_color, full_match)
+            });
+
+            // Then wrap with tooltip if it's a baseXX line
+            if let Some(caps) = base_pattern.captures(line) {
+                let base_name = caps.get(2).unwrap().as_str();
+                if let Some(desc) = get_base_description(base_name) {
+                    return format!(r#"<span class="palette-row" title="{}">{}</span>"#, desc, colored_line);
+                }
+            }
+            colored_line.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[derive(Deserialize)]
 struct SchemePath {
     scheme: String,
@@ -201,12 +274,22 @@ async fn handle_scheme(
 ) -> Response {
     let scheme = sanitize_name(&scheme);
 
-    let scheme_info = SCHEME_INDEX.find_exact(&scheme)
-        .or_else(|| SCHEME_INDEX.find_fuzzy(&scheme, 0.8));
-
-    let scheme_info = match scheme_info {
-        Some(info) => info,
-        None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response(),
+    let exact_match = SCHEME_INDEX.find_exact(&scheme);
+    let scheme_info = match exact_match {
+        Some(info) => {
+            // Redirect if requested name doesn't match canonical name (case mismatch)
+            if scheme != info.name {
+                return Redirect::permanent(&format!("/{}", info.name)).into_response();
+            }
+            info
+        }
+        None => {
+            // Try fuzzy match and redirect if found (typos)
+            if let Some(info) = SCHEME_INDEX.find_fuzzy(&scheme, 0.8) {
+                return Redirect::permanent(&format!("/{}", info.name)).into_response();
+            }
+            return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response();
+        }
     };
 
     let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
@@ -266,40 +349,33 @@ async fn handle_scheme(
         }
         palette_svg.push_str("</svg>");
 
-        fn html_escape(s: &str) -> String {
-            s.replace('&', "&amp;")
-                .replace('<', "&lt;")
-                .replace('>', "&gt;")
-                .replace('"', "&quot;")
-        }
-
         // Generate highlighted Clojure
         let clojure_highlighted = format!(
             r#"<span style="color: #{}">;; Calculate factorial recursively</span>
-(<span style="color: #{}"defn</span> factorial [n]
-  (<span style="color: #{}"if</span> (<span style="color: #{}"&lt;=</span> n <span style="color: #{}"1</span>)
-    <span style="color: #{}"1</span>
-    (<span style="color: #{}"*</span> n (factorial (<span style="color: #{}"dec</span> n)))))"#,
+(<span style="color: #{}">defn</span> factorial [n]
+  (<span style="color: #{}">if</span> (<span style="color: #{}">&lt;=</span> n <span style="color: #{}">1</span>)
+    <span style="color: #{}">1</span>
+    (<span style="color: #{}">*</span> n (factorial (<span style="color: #{}">dec</span> n)))))"#,
             comment, keyword, keyword, function, number, number, function, function
         );
 
         // Generate highlighted HTML
         let html_highlighted = format!(
             r#"<span style="color: #{}">&lt;!-- Page header --&gt;</span>
-&lt;<span style="color: #{}"div</span> <span style="color: #{}"class</span>=<span style="color: #{}">"container"</span>&gt;
-  &lt;<span style="color: #{}"h1</span>&gt;Hello World&lt;/<span style="color: #{}"h1</span>&gt;
-  &lt;<span style="color: #{}"p</span>&gt;Welcome to our site!&lt;/<span style="color: #{}"p</span>&gt;
-&lt;/<span style="color: #{}"div</span>&gt;"#,
+&lt;<span style="color: #{}">div</span> <span style="color: #{}">class</span>=<span style="color: #{}">"container"</span>&gt;
+  &lt;<span style="color: #{}">h1</span>&gt;Hello World&lt;/<span style="color: #{}">h1</span>&gt;
+  &lt;<span style="color: #{}">p</span>&gt;Welcome to our site!&lt;/<span style="color: #{}">p</span>&gt;
+&lt;/<span style="color: #{}">div</span>&gt;"#,
             comment, keyword, keyword, string, keyword, keyword, keyword, keyword, keyword
         );
 
         // Generate highlighted Rust
         let rust_highlighted = format!(
             r#"<span style="color: #{}">//Calculate fibonacci recursively</span>
-<span style="color: #{}"fn</span> <span style="color: #{}"fib</span>(n: <span style="color: #{}"u64</span>) -&gt; <span style="color: #{}"u64</span> {{
-    <span style="color: #{}"match</span> n {{
-        <span style="color: #{}"0</span> | <span style="color: #{}"1</span> =&gt; n,
-        _ =&gt; <span style="color: #{}"fib</span>(n - <span style="color: #{}"1</span>) + <span style="color: #{}"fib</span>(n - <span style="color: #{}"2</span>),
+<span style="color: #{}">fn</span> <span style="color: #{}">fib</span>(n: <span style="color: #{}">u64</span>) -&gt; <span style="color: #{}">u64</span> {{
+    <span style="color: #{}">match</span> n {{
+        <span style="color: #{}">0</span> | <span style="color: #{}">1</span> =&gt; n,
+        _ =&gt; <span style="color: #{}">fib</span>(n - <span style="color: #{}">1</span>) + <span style="color: #{}">fib</span>(n - <span style="color: #{}">2</span>),
     }}
 }}"#,
             comment, keyword, function, keyword, keyword, keyword, number, number, function, number, function, number
@@ -326,6 +402,8 @@ async fn handle_scheme(
         .copy-btn:hover {{ background: #{}; }}
         .back-link {{ text-align: center; margin: 20px 0; }}
         .back-link a {{ color: #{}; }}
+        .hex-color {{ padding: 0 2px; transition: background 0.05s; }}
+        .hex-color:hover {{ background: var(--fg); }}
     </style>
 </head>
 <body>
@@ -366,7 +444,7 @@ async fn handle_scheme(
             clojure_highlighted,
             html_highlighted,
             rust_highlighted,
-            scheme_yaml_str
+            colorize_yaml_hex_values(&scheme_yaml_str, &fg)
         );
 
         Response::builder()
@@ -526,12 +604,22 @@ async fn handle_scheme_template(
     let scheme = sanitize_name(&scheme);
     let template = sanitize_name(&template);
 
-    let scheme_info = SCHEME_INDEX.find_exact(&scheme)
-        .or_else(|| SCHEME_INDEX.find_fuzzy(&scheme, 0.8));
-
-    let scheme_info = match scheme_info {
-        Some(info) => info,
-        None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response(),
+    let exact_match = SCHEME_INDEX.find_exact(&scheme);
+    let scheme_info = match exact_match {
+        Some(info) => {
+            // Redirect if requested name doesn't match canonical name (case mismatch)
+            if scheme != info.name {
+                return Redirect::permanent(&format!("/{}/{}", info.name, template)).into_response();
+            }
+            info
+        }
+        None => {
+            // Try fuzzy match and redirect if found (typos)
+            if let Some(info) = SCHEME_INDEX.find_fuzzy(&scheme, 0.8) {
+                return Redirect::permanent(&format!("/{}/{}", info.name, template)).into_response();
+            }
+            return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response();
+        }
     };
 
     let template_info = match TEMPLATE_INDEX.find(&template) {
@@ -559,31 +647,59 @@ async fn handle_scheme_template(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to compile template").into_response(),
     };
 
+    let slug = slugify(&scheme_data.name);
+    let slug_underscored = slug.replace('-', "_");
+
     let mut data = MapBuilder::new()
         .insert_str("scheme-name", &scheme_data.name)
         .insert_str("scheme-author", &scheme_data.author)
-        .insert_str("scheme-slug", slugify(&scheme_data.name))
+        .insert_str("scheme-slug", &slug)
+        .insert_str("scheme-slug-underscored", &slug_underscored)
         .insert_str("scheme-system", &scheme_info.system);
 
     if !scheme_data.variant.is_empty() {
         data = data.insert_str("scheme-variant", &scheme_data.variant);
+        if scheme_data.variant == "dark" {
+            data = data.insert_bool("scheme-is-dark-variant", true);
+        } else if scheme_data.variant == "light" {
+            data = data.insert_bool("scheme-is-light-variant", true);
+        }
     }
 
     for (key, value) in &scheme_data.palette {
-        let hex_key = format!("{}-hex", key);
         let hex_value = value.trim_start_matches('#');
-        data = data.insert_str(&hex_key, hex_value);
+        data = data.insert_str(&format!("{}-hex", key), hex_value);
 
         if hex_value.len() == 6 {
+            let hex_r = &hex_value[0..2];
+            let hex_g = &hex_value[2..4];
+            let hex_b = &hex_value[4..6];
+
+            data = data
+                .insert_str(&format!("{}-hex-r", key), hex_r)
+                .insert_str(&format!("{}-hex-g", key), hex_g)
+                .insert_str(&format!("{}-hex-b", key), hex_b)
+                .insert_str(&format!("{}-hex-bgr", key), format!("{}{}{}", hex_b, hex_g, hex_r));
+
             if let (Ok(r), Ok(g), Ok(b)) = (
-                u8::from_str_radix(&hex_value[0..2], 16),
-                u8::from_str_radix(&hex_value[2..4], 16),
-                u8::from_str_radix(&hex_value[4..6], 16),
+                u8::from_str_radix(hex_r, 16),
+                u8::from_str_radix(hex_g, 16),
+                u8::from_str_radix(hex_b, 16),
             ) {
+                let r16 = (r as u32) * 257;
+                let g16 = (g as u32) * 257;
+                let b16 = (b as u32) * 257;
+
                 data = data
                     .insert_str(&format!("{}-rgb-r", key), r.to_string())
                     .insert_str(&format!("{}-rgb-g", key), g.to_string())
-                    .insert_str(&format!("{}-rgb-b", key), b.to_string());
+                    .insert_str(&format!("{}-rgb-b", key), b.to_string())
+                    .insert_str(&format!("{}-rgb16-r", key), r16.to_string())
+                    .insert_str(&format!("{}-rgb16-g", key), g16.to_string())
+                    .insert_str(&format!("{}-rgb16-b", key), b16.to_string())
+                    .insert_str(&format!("{}-dec-r", key), format!("{:.6}", r as f64 / 255.0))
+                    .insert_str(&format!("{}-dec-g", key), format!("{:.6}", g as f64 / 255.0))
+                    .insert_str(&format!("{}-dec-b", key), format!("{:.6}", b as f64 / 255.0));
             }
         }
     }
@@ -612,7 +728,11 @@ async fn main() {
         .route("/", get(handle_index))
         .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
-        .route("/{scheme}", get(handle_scheme));
+        .route("/{scheme}", get(handle_scheme))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
