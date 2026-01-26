@@ -46,8 +46,8 @@ impl SchemeIndex {
             if let Ok(entries) = std::fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
-                        if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    if path.extension().and_then(|s| s.to_str()) == Some("yaml")
+                        && let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             let name = sanitize_name(&stem.to_lowercase());
                             if name.is_empty() {
                                 continue;
@@ -58,7 +58,6 @@ impl SchemeIndex {
                                 system: system.to_string(),
                             });
                         }
-                    }
                 }
             }
         }
@@ -119,8 +118,8 @@ impl TemplateIndex {
                 let repo_name = repo_path.file_name().unwrap().to_str().unwrap();
                 let config_path = repo_path.join("templates/config.yaml");
 
-                if let Ok(config_str) = std::fs::read_to_string(&config_path) {
-                    if let Ok(config) = serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(&config_str) {
+                if let Ok(config_str) = std::fs::read_to_string(&config_path)
+                    && let Ok(config) = serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(&config_str) {
                         let short_repo = sanitize_name(
                             repo_name
                                 .trim_start_matches("base16-")
@@ -151,7 +150,6 @@ impl TemplateIndex {
                             }
                         }
                     }
-                }
             }
         }
 
@@ -506,8 +504,8 @@ async fn handle_index() -> Response {
 "#);
 
     for (name, info) in &schemes {
-        if let Ok(yaml_str) = std::fs::read_to_string(&info.path) {
-            if let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
+        if let Ok(yaml_str) = std::fs::read_to_string(&info.path)
+            && let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
                 let mut palette_svg = String::from(r#"<svg width="230" height="20" xmlns="http://www.w3.org/2000/svg">"#);
                 for i in 0..16 {
                     let color = scheme_data.palette.get(&format!("base{:02X}", i))
@@ -523,7 +521,6 @@ async fn handle_index() -> Response {
         </a>
 "#, name, name, palette_svg));
             }
-        }
     }
 
     html.push_str(r#"    </div>
@@ -668,7 +665,7 @@ async fn handle_scheme_template(
 
     for (key, value) in &scheme_data.palette {
         let hex_value = value.trim_start_matches('#');
-        data = data.insert_str(&format!("{}-hex", key), hex_value);
+        data = data.insert_str(format!("{}-hex", key), hex_value);
 
         if hex_value.len() == 6 {
             let hex_r = &hex_value[0..2];
@@ -676,10 +673,10 @@ async fn handle_scheme_template(
             let hex_b = &hex_value[4..6];
 
             data = data
-                .insert_str(&format!("{}-hex-r", key), hex_r)
-                .insert_str(&format!("{}-hex-g", key), hex_g)
-                .insert_str(&format!("{}-hex-b", key), hex_b)
-                .insert_str(&format!("{}-hex-bgr", key), format!("{}{}{}", hex_b, hex_g, hex_r));
+                .insert_str(format!("{}-hex-r", key), hex_r)
+                .insert_str(format!("{}-hex-g", key), hex_g)
+                .insert_str(format!("{}-hex-b", key), hex_b)
+                .insert_str(format!("{}-hex-bgr", key), format!("{}{}{}", hex_b, hex_g, hex_r));
 
             if let (Ok(r), Ok(g), Ok(b)) = (
                 u8::from_str_radix(hex_r, 16),
@@ -691,15 +688,15 @@ async fn handle_scheme_template(
                 let b16 = (b as u32) * 257;
 
                 data = data
-                    .insert_str(&format!("{}-rgb-r", key), r.to_string())
-                    .insert_str(&format!("{}-rgb-g", key), g.to_string())
-                    .insert_str(&format!("{}-rgb-b", key), b.to_string())
-                    .insert_str(&format!("{}-rgb16-r", key), r16.to_string())
-                    .insert_str(&format!("{}-rgb16-g", key), g16.to_string())
-                    .insert_str(&format!("{}-rgb16-b", key), b16.to_string())
-                    .insert_str(&format!("{}-dec-r", key), format!("{:.6}", r as f64 / 255.0))
-                    .insert_str(&format!("{}-dec-g", key), format!("{:.6}", g as f64 / 255.0))
-                    .insert_str(&format!("{}-dec-b", key), format!("{:.6}", b as f64 / 255.0));
+                    .insert_str(format!("{}-rgb-r", key), r.to_string())
+                    .insert_str(format!("{}-rgb-g", key), g.to_string())
+                    .insert_str(format!("{}-rgb-b", key), b.to_string())
+                    .insert_str(format!("{}-rgb16-r", key), r16.to_string())
+                    .insert_str(format!("{}-rgb16-g", key), g16.to_string())
+                    .insert_str(format!("{}-rgb16-b", key), b16.to_string())
+                    .insert_str(format!("{}-dec-r", key), format!("{:.6}", r as f64 / 255.0))
+                    .insert_str(format!("{}-dec-g", key), format!("{:.6}", g as f64 / 255.0))
+                    .insert_str(format!("{}-dec-b", key), format!("{:.6}", b as f64 / 255.0));
             }
         }
     }
@@ -717,14 +714,8 @@ async fn handle_scheme_template(
         .unwrap()
 }
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt::init();
-
-    Lazy::force(&SCHEME_INDEX);
-    Lazy::force(&TEMPLATE_INDEX);
-
-    let app = Router::new()
+fn create_app() -> Router {
+    Router::new()
         .route("/", get(handle_index))
         .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
@@ -732,11 +723,265 @@ async fn main() {
         .layer(SetResponseHeaderLayer::if_not_present(
             axum::http::header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
-        ));
+        ))
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt::init();
+
+    Lazy::force(&SCHEME_INDEX);
+    Lazy::force(&TEMPLATE_INDEX);
+
+    let app = create_app();
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use axum::http::{Request, StatusCode};
+    use tower::util::ServiceExt;
+
+    #[test]
+    fn test_scheme_index_loads() {
+        let count = SCHEME_INDEX.schemes.len();
+        assert!(count > 400, "Expected 400+ schemes, got {}", count);
+    }
+
+    #[test]
+    fn test_template_index_loads() {
+        let count = TEMPLATE_INDEX.templates.len();
+        assert!(count > 20, "Expected 20+ templates, got {}", count);
+    }
+
+    #[test]
+    fn test_scheme_exact_match() {
+        let info = SCHEME_INDEX.find_exact("monokai");
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().name, "monokai");
+    }
+
+    #[test]
+    fn test_scheme_exact_match_case_insensitive() {
+        let info = SCHEME_INDEX.find_exact("MONOKAI");
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().name, "monokai");
+    }
+
+    #[test]
+    fn test_scheme_fuzzy_match_typo() {
+        let info = SCHEME_INDEX.find_fuzzy("monoki", 0.8);
+        assert!(info.is_some(), "Should fuzzy match 'monoki' to 'monokai'");
+        assert_eq!(info.unwrap().name, "monokai");
+    }
+
+    #[test]
+    fn test_scheme_fuzzy_match_partial() {
+        let info = SCHEME_INDEX.find_fuzzy("dracula", 0.8);
+        assert!(info.is_some());
+        assert_eq!(info.unwrap().name, "dracula");
+    }
+
+    #[test]
+    fn test_scheme_fuzzy_no_match_garbage() {
+        let info = SCHEME_INDEX.find_fuzzy("xyzzy123", 0.8);
+        assert!(info.is_none(), "Should not match random garbage");
+    }
+
+    #[test]
+    fn test_sanitize_name() {
+        assert_eq!(sanitize_name("hello-world"), "hello-world");
+        assert_eq!(sanitize_name("hello_world"), "hello_world");
+        assert_eq!(sanitize_name("hello world"), "helloworld");
+        assert_eq!(sanitize_name("hello<script>"), "helloscript");
+        assert_eq!(sanitize_name("../../../etc/passwd"), "etcpasswd");
+    }
+
+    #[test]
+    fn test_slugify() {
+        assert_eq!(slugify("Monokai"), "monokai");
+        assert_eq!(slugify("Gruvbox Dark"), "gruvbox-dark");
+        assert_eq!(slugify("One Light"), "one-light");
+    }
+
+    #[test]
+    fn test_hex_to_rgb_conversion() {
+        // Test the conversion logic used in template rendering
+        let hex = "f92672";
+        let hex_r = &hex[0..2];
+        let hex_g = &hex[2..4];
+        let hex_b = &hex[4..6];
+
+        let r = u8::from_str_radix(hex_r, 16).unwrap();
+        let g = u8::from_str_radix(hex_g, 16).unwrap();
+        let b = u8::from_str_radix(hex_b, 16).unwrap();
+
+        assert_eq!(r, 249);
+        assert_eq!(g, 38);
+        assert_eq!(b, 114);
+
+        // Test rgb16 (0-65535 range)
+        let r16 = (r as u32) * 257;
+        let g16 = (g as u32) * 257;
+        let b16 = (b as u32) * 257;
+
+        assert_eq!(r16, 63993);
+        assert_eq!(g16, 9766);
+        assert_eq!(b16, 29298);
+
+        // Test decimal (0.0-1.0 range)
+        let r_dec = r as f64 / 255.0;
+        let g_dec = g as f64 / 255.0;
+        let b_dec = b as f64 / 255.0;
+
+        assert!((r_dec - 0.976471).abs() < 0.0001);
+        assert!((g_dec - 0.149020).abs() < 0.0001);
+        assert!((b_dec - 0.447059).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_hex_bgr_format() {
+        let hex = "f92672";
+        let hex_r = &hex[0..2];
+        let hex_g = &hex[2..4];
+        let hex_b = &hex[4..6];
+        let bgr = format!("{}{}{}", hex_b, hex_g, hex_r);
+        assert_eq!(bgr, "7226f9");
+    }
+
+    #[tokio::test]
+    async fn test_scheme_endpoint_yaml() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/yaml"
+        );
+        assert_eq!(
+            response.headers().get("x-scheme-name").unwrap(),
+            "monokai"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scheme_endpoint_json() {
+        let app = create_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/monokai?format=json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["name"], "Monokai");
+    }
+
+    #[tokio::test]
+    async fn test_scheme_fuzzy_redirect() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monoki").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "/monokai"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scheme_not_found() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/xyzzy123456").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_template_endpoint() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai/vim").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("x-scheme-name").unwrap(),
+            "monokai"
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let content = String::from_utf8(body.to_vec()).unwrap();
+        assert!(content.contains("monokai"), "Template should contain scheme name");
+    }
+
+    #[tokio::test]
+    async fn test_template_not_found() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai/nonexistent").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_help_endpoint() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/--help").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let content = String::from_utf8(body.to_vec()).unwrap();
+        assert!(content.contains("monokai"));
+        assert!(content.contains("vim"));
+    }
+
+    #[tokio::test]
+    async fn test_nosniff_header() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.headers().get("x-content-type-options").unwrap(),
+            "nosniff"
+        );
+    }
 }
