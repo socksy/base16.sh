@@ -24,6 +24,16 @@ static TEMPLATE_INDEX: Lazy<TemplateIndex> = Lazy::new(|| {
     TemplateIndex::load().expect("Failed to load template index")
 });
 
+static INDEX_TEMPLATE: Lazy<mustache::Template> = Lazy::new(|| {
+    mustache::compile_path("templates/index.html.mustache")
+        .expect("Failed to load index template")
+});
+
+static SCHEME_TEMPLATE: Lazy<mustache::Template> = Lazy::new(|| {
+    mustache::compile_path("templates/scheme.html.mustache")
+        .expect("Failed to load scheme template")
+});
+
 #[derive(Debug)]
 struct SchemeInfo {
     name: String,
@@ -254,6 +264,18 @@ fn colorize_yaml_hex_values(yaml: &str, fg_hex: &str) -> String {
         .join("\n")
 }
 
+fn build_palette_svg(scheme_data: &SchemeYaml, width: u32, height: u32, rect_width: u32) -> String {
+    let mut svg = format!(r#"<svg width="{}" height="{}" xmlns="http://www.w3.org/2000/svg">"#, width, height);
+    for i in 0..16 {
+        let color = scheme_data.palette.get(&format!("base{:02X}", i))
+            .cloned()
+            .unwrap_or_else(|| "#000000".to_string());
+        svg.push_str(&format!(r#"<rect x="{}" y="0" width="{}" height="{}" fill="{}"/>"#, i * rect_width, rect_width, height, color));
+    }
+    svg.push_str("</svg>");
+    svg
+}
+
 #[derive(Deserialize)]
 struct SchemePath {
     scheme: String,
@@ -329,121 +351,25 @@ async fn handle_scheme(
             Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
         };
 
-        let bg = scheme_data.palette.get("base00").cloned().unwrap_or_else(|| "#000000".to_string()).trim_start_matches('#').to_string();
         let fg = scheme_data.palette.get("base05").cloned().unwrap_or_else(|| "#ffffff".to_string()).trim_start_matches('#').to_string();
-        let comment = scheme_data.palette.get("base03").cloned().unwrap_or_else(|| "#888888".to_string()).trim_start_matches('#').to_string();
-        let keyword = scheme_data.palette.get("base0E").cloned().unwrap_or_else(|| "#aa88ff".to_string()).trim_start_matches('#').to_string();
-        let string = scheme_data.palette.get("base0B").cloned().unwrap_or_else(|| "#88ff88".to_string()).trim_start_matches('#').to_string();
-        let function = scheme_data.palette.get("base0D").cloned().unwrap_or_else(|| "#8888ff".to_string()).trim_start_matches('#').to_string();
-        let number = scheme_data.palette.get("base09").cloned().unwrap_or_else(|| "#ffaa88".to_string()).trim_start_matches('#').to_string();
+        let palette_svg = build_palette_svg(&scheme_data, 320, 40, 20);
 
-        // Build color palette SVG
-        let mut palette_svg = String::from(r#"<svg width="320" height="40" xmlns="http://www.w3.org/2000/svg">"#);
-        for i in 0..16 {
-            let color = scheme_data.palette.get(&format!("base{:02X}", i))
-                .cloned()
-                .unwrap_or_else(|| "#000000".to_string());
-            palette_svg.push_str(&format!(r#"<rect x="{}" y="0" width="20" height="40" fill="{}"/>"#, i * 20, color));
+        let mut data = MapBuilder::new()
+            .insert_str("scheme-name", &scheme_data.name)
+            .insert_str("scheme-author", &scheme_data.author)
+            .insert_str("scheme-system", &scheme_info.system)
+            .insert_str("palette-svg", &palette_svg)
+            .insert_str("yaml-colorized", colorize_yaml_hex_values(&scheme_yaml_str, &fg));
+
+        for (key, value) in &scheme_data.palette {
+            let hex_value = value.trim_start_matches('#');
+            data = data.insert_str(format!("{}-hex", key), hex_value);
         }
-        palette_svg.push_str("</svg>");
 
-        // Generate highlighted Clojure
-        let clojure_highlighted = format!(
-            r#"<span style="color: #{}">;; Calculate factorial recursively</span>
-(<span style="color: #{}">defn</span> factorial [n]
-  (<span style="color: #{}">if</span> (<span style="color: #{}">&lt;=</span> n <span style="color: #{}">1</span>)
-    <span style="color: #{}">1</span>
-    (<span style="color: #{}">*</span> n (factorial (<span style="color: #{}">dec</span> n)))))"#,
-            comment, keyword, keyword, function, number, number, function, function
-        );
-
-        // Generate highlighted HTML
-        let html_highlighted = format!(
-            r#"<span style="color: #{}">&lt;!-- Page header --&gt;</span>
-&lt;<span style="color: #{}">div</span> <span style="color: #{}">class</span>=<span style="color: #{}">"container"</span>&gt;
-  &lt;<span style="color: #{}">h1</span>&gt;Hello World&lt;/<span style="color: #{}">h1</span>&gt;
-  &lt;<span style="color: #{}">p</span>&gt;Welcome to our site!&lt;/<span style="color: #{}">p</span>&gt;
-&lt;/<span style="color: #{}">div</span>&gt;"#,
-            comment, keyword, keyword, string, keyword, keyword, keyword, keyword, keyword
-        );
-
-        // Generate highlighted Rust
-        let rust_highlighted = format!(
-            r#"<span style="color: #{}">//Calculate fibonacci recursively</span>
-<span style="color: #{}">fn</span> <span style="color: #{}">fib</span>(n: <span style="color: #{}">u64</span>) -&gt; <span style="color: #{}">u64</span> {{
-    <span style="color: #{}">match</span> n {{
-        <span style="color: #{}">0</span> | <span style="color: #{}">1</span> =&gt; n,
-        _ =&gt; <span style="color: #{}">fib</span>(n - <span style="color: #{}">1</span>) + <span style="color: #{}">fib</span>(n - <span style="color: #{}">2</span>),
-    }}
-}}"#,
-            comment, keyword, function, keyword, keyword, keyword, number, number, function, number, function, number
-        );
-
-        let html = format!(r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>{} - base16.sh</title>
-    <style>
-        body {{ font-family: monospace; background: #{}; color: #{}; padding: 20px; }}
-        h1 {{ text-align: center; }}
-        .container {{ max-width: 1200px; margin: 0 auto; }}
-        .palette {{ text-align: center; margin: 20px 0; }}
-        .code-examples {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 40px 0; }}
-        .code-block {{ border: 1px solid #{}; padding: 15px; }}
-        .lang-label {{ font-size: 12px; color: #{}; margin-bottom: 5px; }}
-        pre {{ margin: 0; font-size: 12px; line-height: 1.4; overflow-x: auto; }}
-        .yaml-section {{ margin-top: 40px; }}
-        .yaml-section h2 {{ color: #{}; }}
-        .yaml-container {{ background: #{}; border: 1px solid #{}; padding: 15px; position: relative; }}
-        .copy-btn {{ position: absolute; top: 10px; right: 10px; background: #{}; color: #{}; border: 1px solid #{}; padding: 5px 10px; cursor: pointer; }}
-        .copy-btn:hover {{ background: #{}; }}
-        .back-link {{ text-align: center; margin: 20px 0; }}
-        .back-link a {{ color: #{}; }}
-        .hex-color {{ padding: 0 2px; transition: background 0.05s; }}
-        .hex-color:hover {{ background: var(--fg); }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="back-link"><a href="/">← Back to all themes</a></div>
-        <h1>{} ({})</h1>
-        <p style="text-align: center; color: #{}">{}</p>
-        <div class="palette">{}</div>
-
-        <div class="code-examples">
-            <div class="code-block">
-                <div class="lang-label">Clojure</div>
-                <pre>{}</pre>
-            </div>
-            <div class="code-block">
-                <div class="lang-label">HTML</div>
-                <pre>{}</pre>
-            </div>
-            <div class="code-block">
-                <div class="lang-label">Rust</div>
-                <pre>{}</pre>
-            </div>
-        </div>
-
-        <div class="yaml-section">
-            <h2>Scheme YAML</h2>
-            <div class="yaml-container">
-                <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('yaml').textContent)">Copy</button>
-                <pre id="yaml">{}</pre>
-            </div>
-        </div>
-    </div>
-</body>
-</html>
-"#,
-            scheme_data.name, bg, fg, comment, comment, fg, bg, comment, bg, fg, comment, bg, function,
-            scheme_data.name, scheme_info.system, comment, scheme_data.author, palette_svg,
-            clojure_highlighted,
-            html_highlighted,
-            rust_highlighted,
-            colorize_yaml_hex_values(&scheme_yaml_str, &fg)
-        );
+        let html = match SCHEME_TEMPLATE.render_data_to_string(&data.build()) {
+            Ok(h) => h,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to render template").into_response(),
+        };
 
         Response::builder()
             .header("content-type", "text/html; charset=utf-8")
@@ -472,73 +398,39 @@ async fn handle_index() -> Response {
     let mut schemes: Vec<(&String, &SchemeInfo)> = SCHEME_INDEX.schemes.iter().collect();
     schemes.sort_by_key(|(name, _)| *name);
 
-    let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
-    templates.sort();
+    let mut template_names: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
+    template_names.sort();
 
-    let mut html = String::from(r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>base16.sh - All Themes</title>
-    <style>
-        body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
-        h1 { text-align: center; }
-        h2 { color: #6a9fb5; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; }
-        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 20px; }
-        .scheme-card { border: 1px solid #333; padding: 10px; display: block; text-decoration: none; }
-        .scheme-card:hover { background: #333; }
-        .scheme-name { color: #6a9fb5; margin-bottom: 5px; }
-        .scheme-palette { margin-top: 5px; }
-        .templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
-        .templates a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
-        .templates a:hover { background: #333; }
-    </style>
-</head>
-<body>
-    <h1>base16.sh</h1>
-    <p style="text-align: center;">Base16/Base24 theme server - <a href="/--help" style="color: #6a9fb5;">API docs</a></p>
-
-    <h2>Schemes (441)</h2>
-    <p>Click any theme to see preview with code examples</p>
-    <div class="schemes">
-"#);
-
-    for (name, info) in &schemes {
-        if let Ok(yaml_str) = std::fs::read_to_string(&info.path)
-            && let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
-                let mut palette_svg = String::from(r#"<svg width="230" height="20" xmlns="http://www.w3.org/2000/svg">"#);
-                for i in 0..16 {
-                    let color = scheme_data.palette.get(&format!("base{:02X}", i))
-                        .cloned()
-                        .unwrap_or_else(|| "#000000".to_string());
-                    palette_svg.push_str(&format!(r#"<rect x="{}" y="0" width="14" height="20" fill="{}"/>"#, i * 14, color));
-                }
-                palette_svg.push_str("</svg>");
-
-                html.push_str(&format!(r#"        <a href="/{}" class="scheme-card">
-            <div class="scheme-name">{}</div>
-            <div class="scheme-palette">{}</div>
-        </a>
-"#, name, name, palette_svg));
+    let data = MapBuilder::new()
+        .insert_str("scheme-count", schemes.len().to_string())
+        .insert_str("template-count", template_names.len().to_string())
+        .insert_vec("schemes", |mut vec| {
+            for (name, info) in &schemes {
+                if let Ok(yaml_str) = std::fs::read_to_string(&info.path)
+                    && let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
+                        let palette_svg = build_palette_svg(&scheme_data, 224, 20, 14);
+                        vec = vec.push_map(|map| {
+                            map.insert_str("name", name.as_str())
+                               .insert_str("palette-svg", &palette_svg)
+                        });
+                    }
             }
-    }
+            vec
+        })
+        .insert_vec("templates", |mut vec| {
+            for name in &template_names {
+                vec = vec.push_map(|map| {
+                    map.insert_str("name", name.as_str())
+                });
+            }
+            vec
+        })
+        .build();
 
-    html.push_str(r#"    </div>
-
-    <h2>Templates (31)</h2>
-    <p>Use with any scheme: /{scheme}/{template}</p>
-    <div class="templates">
-"#);
-
-    for template in &templates {
-        html.push_str(&format!(r#"        <a href="/monokai/{}">{}</a>
-"#, template, template));
-    }
-
-    html.push_str(r#"    </div>
-</body>
-</html>
-"#);
+    let html = match INDEX_TEMPLATE.render_data_to_string(&data) {
+        Ok(h) => h,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to render template").into_response(),
+    };
 
     Response::builder()
         .header("content-type", "text/html; charset=utf-8")
@@ -732,6 +624,8 @@ async fn main() {
 
     Lazy::force(&SCHEME_INDEX);
     Lazy::force(&TEMPLATE_INDEX);
+    Lazy::force(&INDEX_TEMPLATE);
+    Lazy::force(&SCHEME_TEMPLATE);
 
     let app = create_app();
 

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>{{scheme-name}} - base16.sh</title>
+    <style>
+        body { font-family: monospace; background: #{{base00-hex}}; color: #{{base05-hex}}; padding: 20px; }
+        h1 { text-align: center; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .palette { text-align: center; margin: 20px 0; }
+        .code-examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin: 40px 0; }
+        .code-block { border: 1px solid #{{base03-hex}}; padding: 15px; }
+        .lang-label { font-size: 12px; color: #{{base03-hex}}; margin-bottom: 5px; }
+        pre { margin: 0; font-size: 12px; line-height: 1.4; overflow-x: auto; }
+        .yaml-section { margin-top: 40px; }
+        .yaml-section h2 { color: #{{base05-hex}}; }
+        .yaml-container { background: #{{base00-hex}}; border: 1px solid #{{base03-hex}}; padding: 15px; position: relative; }
+        .copy-btn { position: absolute; top: 10px; right: 10px; background: #{{base00-hex}}; color: #{{base05-hex}}; border: 1px solid #{{base03-hex}}; padding: 5px 10px; cursor: pointer; }
+        .copy-btn:hover { background: #{{base00-hex}}; }
+        .back-link { text-align: center; margin: 20px 0; }
+        .back-link a { color: #{{base0D-hex}}; }
+        .hex-color { padding: 0 2px; transition: background 0.05s; }
+        .hex-color:hover { background: var(--fg); }
+        .comment { color: #{{base03-hex}}; }
+        .keyword { color: #{{base0E-hex}}; }
+        .function { color: #{{base0D-hex}}; }
+        .string { color: #{{base0B-hex}}; }
+        .number { color: #{{base09-hex}}; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="back-link"><a href="/">&larr; Back to all themes</a></div>
+        <h1>{{scheme-name}} ({{scheme-system}})</h1>
+        <p style="text-align: center; color: #{{base03-hex}}">{{scheme-author}}</p>
+        <div class="palette">{{{palette-svg}}}</div>
+
+        <div class="code-examples">
+            <div class="code-block">
+                <div class="lang-label">Clojure</div>
+                <pre><span class="comment">;; Calculate factorial recursively</span>
+(<span class="keyword">defn</span> factorial [n]
+  (<span class="keyword">if</span> (<span class="function">&lt;=</span> n <span class="number">1</span>)
+    <span class="number">1</span>
+    (<span class="function">*</span> n (factorial (<span class="function">dec</span> n)))))</pre>
+            </div>
+            <div class="code-block">
+                <div class="lang-label">HTML</div>
+                <pre><span class="comment">&lt;!-- Page header --&gt;</span>
+&lt;<span class="keyword">div</span> <span class="keyword">class</span>=<span class="string">"container"</span>&gt;
+  &lt;<span class="keyword">h1</span>&gt;Hello World&lt;/<span class="keyword">h1</span>&gt;
+  &lt;<span class="keyword">p</span>&gt;Welcome to our site!&lt;/<span class="keyword">p</span>&gt;
+&lt;/<span class="keyword">div</span>&gt;</pre>
+            </div>
+            <div class="code-block">
+                <div class="lang-label">Rust</div>
+                <pre><span class="comment">// Calculate fibonacci recursively</span>
+<span class="keyword">fn</span> <span class="function">fib</span>(n: <span class="keyword">u64</span>) -&gt; <span class="keyword">u64</span> {
+    <span class="keyword">match</span> n {
+        <span class="number">0</span> | <span class="number">1</span> =&gt; n,
+        _ =&gt; <span class="function">fib</span>(n - <span class="number">1</span>) + <span class="function">fib</span>(n - <span class="number">2</span>),
+    }
+}</pre>
+            </div>
+        </div>
+
+        <div class="yaml-section">
+            <h2>Scheme YAML</h2>
+            <div class="yaml-container">
+                <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('yaml').textContent)">Copy</button>
+                <pre id="yaml">{{{yaml-colorized}}}</pre>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

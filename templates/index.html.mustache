@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>base16.sh - All Themes</title>
+    <style>
+        body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; }
+        h2 { color: #6a9fb5; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; }
+        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 20px; }
+        .scheme-card { border: 1px solid #333; padding: 10px; display: block; text-decoration: none; }
+        .scheme-card:hover { background: #333; }
+        .scheme-name { color: #6a9fb5; margin-bottom: 5px; }
+        .scheme-palette { margin-top: 5px; }
+        .templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
+        .templates a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
+        .templates a:hover { background: #333; }
+    </style>
+</head>
+<body>
+    <h1>base16.sh</h1>
+    <p style="text-align: center;">Base16/Base24 theme server - <a href="/--help" style="color: #6a9fb5;">API docs</a></p>
+
+    <h2>Schemes ({{scheme-count}})</h2>
+    <p>Click any theme to see preview with code examples</p>
+    <div class="schemes">
+{{#schemes}}
+        <a href="/{{name}}" class="scheme-card">
+            <div class="scheme-name">{{name}}</div>
+            <div class="scheme-palette">{{{palette-svg}}}</div>
+        </a>
+{{/schemes}}
+    </div>
+
+    <h2>Templates ({{template-count}})</h2>
+    <p>Use with any scheme: /{scheme}/{template}</p>
+    <div class="templates">
+{{#templates}}
+        <a href="/monokai/{{name}}">{{name}}</a>
+{{/templates}}
+    </div>
+</body>
+</html>
