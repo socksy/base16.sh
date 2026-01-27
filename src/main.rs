@@ -3,10 +3,11 @@ use axum::{
     routing::get,
     extract::{Path, Query},
     response::{IntoResponse, Response, Redirect},
-    http::{StatusCode, HeaderMap, HeaderValue},
+    http::{StatusCode, HeaderMap, HeaderValue, header},
     body::Body,
 };
 use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use mustache::MapBuilder;
 use once_cell::sync::Lazy;
 use rand::seq::SliceRandom;
@@ -892,9 +893,30 @@ fn create_app() -> Router {
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))
         .layer(SetResponseHeaderLayer::if_not_present(
-            axum::http::header::X_CONTENT_TYPE_OPTIONS,
+            header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
         ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_FRAME_OPTIONS,
+            HeaderValue::from_static("DENY"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::STRICT_TRANSPORT_SECURITY,
+            HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=3600"),
+        ))
+        .layer(RequestBodyLimitLayer::new(1024))
 }
 
 #[tokio::main]
@@ -1171,6 +1193,30 @@ mod tests {
             response.headers().get("x-content-type-options").unwrap(),
             "nosniff"
         );
+    }
+
+    #[tokio::test]
+    async fn test_security_headers() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.headers().get("x-frame-options").unwrap(),
+            "DENY"
+        );
+        assert_eq!(
+            response.headers().get("strict-transport-security").unwrap(),
+            "max-age=31536000; includeSubDomains"
+        );
+        assert_eq!(
+            response.headers().get("referrer-policy").unwrap(),
+            "strict-origin-when-cross-origin"
+        );
+        assert!(response.headers().get("content-security-policy").is_some());
+        assert!(response.headers().get("cache-control").is_some());
     }
 
     #[tokio::test]
