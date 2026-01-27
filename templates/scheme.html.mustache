@@ -138,12 +138,10 @@
             <div class="code-examples">
                 <div class="code-block">
                     <div class="code-label">Rust</div>
-                    <pre><span class="comment">// Calculate fibonacci</span>
-<span class="keyword">fn</span> <span class="function">fib</span>(n: <span class="keyword">u64</span>) -> <span class="keyword">u64</span> {
-    <span class="keyword">match</span> n {
-        <span class="number">0</span> | <span class="number">1</span> => n,
-        _ => <span class="function">fib</span>(n - <span class="number">1</span>) + <span class="function">fib</span>(n - <span class="number">2</span>),
-    }
+                    <pre><span class="comment">// Check if prime</span>
+<span class="keyword">fn</span> <span class="function">is_prime</span>(n: <span class="keyword">u32</span>) -> <span class="keyword">bool</span> {
+    <span class="keyword">if</span> n < <span class="number">2</span> { <span class="keyword">return false</span> }
+    (<span class="number">2</span>..n).<span class="function">all</span>(|i| n % i != <span class="number">0</span>)
 }</pre>
                 </div>
                 <div class="code-block">
