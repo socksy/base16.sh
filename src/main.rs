@@ -9,6 +9,7 @@ use axum::{
 use tower_http::set_header::SetResponseHeaderLayer;
 use mustache::MapBuilder;
 use once_cell::sync::Lazy;
+use rand::seq::SliceRandom;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -606,9 +607,18 @@ async fn handle_scheme_template(
         .unwrap()
 }
 
+async fn handle_random() -> Redirect {
+    let scheme = SCHEME_INDEX.names
+        .choose(&mut rand::thread_rng())
+        .map(|s| s.as_str())
+        .unwrap_or("monokai");
+    Redirect::to(&format!("/{}", scheme))
+}
+
 fn create_app() -> Router {
     Router::new()
         .route("/", get(handle_index))
+        .route("/--random", get(handle_random))
         .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))

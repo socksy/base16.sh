@@ -24,8 +24,9 @@
         }
         .container { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
 
-        .back { color: var(--muted); text-decoration: none; font-size: 14px; }
-        .back:hover { color: var(--fg); }
+        .nav { display: flex; justify-content: space-between; }
+        .nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+        .nav a:hover { color: var(--fg); }
 
         header { margin: 40px 0 60px; }
         h1 {
@@ -57,7 +58,7 @@
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
         }
-        .code-block { border: 1px solid var(--fg); }
+        .code-block { border: 1px solid var(--fg); min-width: 0; }
         .code-label {
             font-size: 11px;
             text-transform: uppercase;
@@ -120,7 +121,10 @@
 </head>
 <body>
     <div class="container">
-        <a href="/" class="back">&larr; back</a>
+        <div class="nav">
+            <a href="/">&larr; back</a>
+            <a href="/--random">random</a>
+        </div>
 
         <header>
             <h1>{{scheme-name}}</h1>
