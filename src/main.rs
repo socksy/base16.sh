@@ -44,7 +44,6 @@ struct SchemeInfo {
 
 struct SchemeIndex {
     schemes: HashMap<String, SchemeInfo>,
-    names: Vec<String>,
     names_sorted: Vec<String>,
     color_sorted: Vec<String>,
 }
@@ -75,18 +74,14 @@ impl SchemeIndex {
             }
         }
 
-        let names: Vec<String> = schemes.keys().cloned().collect();
-
-        // Pre-compute name-sorted order
         let mut names_sorted: Vec<String> = schemes.keys().cloned().collect();
         names_sorted.sort();
 
-        // Pre-compute color-sorted order
         let color_sorted = Self::compute_color_order(&schemes);
 
         tracing::info!("Loaded {} schemes into index", schemes.len());
 
-        Ok(SchemeIndex { schemes, names, names_sorted, color_sorted })
+        Ok(SchemeIndex { schemes, names_sorted, color_sorted })
     }
 
     fn compute_color_order(schemes: &HashMap<String, SchemeInfo>) -> Vec<String> {
@@ -185,15 +180,12 @@ impl SchemeIndex {
 
     fn get_neighbors(&self, name: &str, by_color: bool) -> (Option<&str>, Option<&str>) {
         let list = if by_color { &self.color_sorted } else { &self.names_sorted };
-        let pos = list.iter().position(|n| n == name);
-        match pos {
-            Some(i) => {
-                let prev = if i > 0 { list.get(i - 1).map(|s| s.as_str()) } else { None };
-                let next = list.get(i + 1).map(|s| s.as_str());
-                (prev, next)
-            }
-            None => (None, None),
-        }
+        let Some(i) = list.iter().position(|n| n == name) else {
+            return (None, None);
+        };
+        let prev = i.checked_sub(1).map(|j| list[j].as_str());
+        let next = list.get(i + 1).map(|s| s.as_str());
+        (prev, next)
     }
 
     fn find_exact(&self, name: &str) -> Option<&SchemeInfo> {
@@ -202,22 +194,12 @@ impl SchemeIndex {
 
     fn find_fuzzy(&self, query: &str, threshold: f64) -> Option<&SchemeInfo> {
         let query_lower = query.to_lowercase();
-        let mut best_match: Option<(&String, f64)> = None;
-
-        for name in &self.names {
-            let similarity = strsim::jaro_winkler(&query_lower, name);
-            if similarity >= threshold {
-                if let Some((_, best_sim)) = best_match {
-                    if similarity > best_sim {
-                        best_match = Some((name, similarity));
-                    }
-                } else {
-                    best_match = Some((name, similarity));
-                }
-            }
-        }
-
-        best_match.and_then(|(name, _)| self.schemes.get(name))
+        self.names_sorted
+            .iter()
+            .map(|name| (name, strsim::jaro_winkler(&query_lower, name)))
+            .filter(|(_, sim)| *sim >= threshold)
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .and_then(|(name, _)| self.schemes.get(name))
     }
 }
 
@@ -288,6 +270,12 @@ impl TemplateIndex {
 
     fn find(&self, name: &str) -> Option<&TemplateInfo> {
         self.templates.get(&name.to_lowercase())
+    }
+
+    fn sorted_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.templates.keys().cloned().collect();
+        names.sort();
+        names
     }
 }
 
@@ -496,24 +484,17 @@ async fn handle_scheme(
     Query(query): Query<FormatQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let scheme = sanitize_name(&scheme);
+    let sanitized = sanitize_name(&scheme);
 
-    let exact_match = SCHEME_INDEX.find_exact(&scheme);
-    let scheme_info = match exact_match {
-        Some(info) => {
-            // Redirect if requested name doesn't match canonical name (case mismatch)
-            if scheme != info.name {
-                return Redirect::permanent(&format!("/{}", info.name)).into_response();
-            }
-            info
+    let scheme_info = if let Some(info) = SCHEME_INDEX.find_exact(&sanitized) {
+        if scheme != info.name {
+            return Redirect::permanent(&format!("/{}", info.name)).into_response();
         }
-        None => {
-            // Try fuzzy match and redirect if found (typos)
-            if let Some(info) = SCHEME_INDEX.find_fuzzy(&scheme, 0.8) {
-                return Redirect::permanent(&format!("/{}", info.name)).into_response();
-            }
-            return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response();
-        }
+        info
+    } else if let Some(info) = SCHEME_INDEX.find_fuzzy(&sanitized, 0.8) {
+        return Redirect::permanent(&format!("/{}", info.name)).into_response();
+    } else {
+        return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", sanitized)).into_response();
     };
 
     let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
@@ -633,13 +614,10 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
     };
 
     if format != "html" {
-        let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
-        schemes.sort();
-
-        let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
-        templates.sort();
-
-        let response = HelpResponse { schemes, templates };
+        let response = HelpResponse {
+            schemes: SCHEME_INDEX.names_sorted.clone(),
+            templates: TEMPLATE_INDEX.sorted_names(),
+        };
 
         return match format {
             "yaml" => {
@@ -678,8 +656,7 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
     // Always sort alphabetically - color order is handled via CSS
     schemes_with_data.sort_by(|(name_a, _, _, _), (name_b, _, _, _)| name_a.cmp(name_b));
 
-    let mut template_names: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
-    template_names.sort();
+    let template_names = TEMPLATE_INDEX.sorted_names();
 
     let base16_count = schemes_with_data.iter().filter(|(_, _, _, sys)| sys == "base16").count();
     let base24_count = schemes_with_data.iter().filter(|(_, _, _, sys)| sys == "base24").count();
@@ -696,74 +673,17 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
         .insert_bool("filter-base16", filter_base16)
         .insert_bool("filter-base24", filter_base24)
         .insert_vec("schemes", |mut vec| {
-            // Build color-sorted order index
-            let color_keys = [
-                "base00", "base01", "base02", "base03", "base04", "base05", "base06", "base07",
-                "base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F",
-            ];
-            let scheme_to_vector = |palette: &HashMap<String, String>| -> Vec<f64> {
-                color_keys.iter().flat_map(|key| {
-                    let hex = palette.get(*key).map(|s| s.as_str()).unwrap_or("#000000").trim_start_matches('#');
-                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
-                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
-                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
-                    [r, g, b]
-                }).collect()
-            };
-            let color_distance = |a: &[f64], b: &[f64]| -> f64 {
-                a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
-            };
-            let is_grey_scheme = |palette: &HashMap<String, String>| -> bool {
-                let accent_keys = ["base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F"];
-                let mut grey_count = 0;
-                for key in accent_keys {
-                    if let Some(hex) = palette.get(key) {
-                        let hex = hex.trim_start_matches('#');
-                        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64 / 255.0;
-                        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64 / 255.0;
-                        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64 / 255.0;
-                        let max = r.max(g).max(b);
-                        let min = r.min(g).min(b);
-                        let saturation = if max == 0.0 { 0.0 } else { (max - min) / max };
-                        if saturation < 0.2 {
-                            grey_count += 1;
-                        }
-                    }
-                }
-                grey_count >= 5
-            };
-            let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, s, _, _)| scheme_to_vector(&s.palette)).collect();
-            let n = schemes_with_data.len();
-            let mut visited = vec![false; n];
-            let mut order = Vec::with_capacity(n);
-            let start = vectors.iter().enumerate().min_by(|(_, a), (_, b)| {
-                (a[0] + a[1] + a[2]).partial_cmp(&(b[0] + b[1] + b[2])).unwrap()
-            }).map(|(i, _)| i).unwrap_or(0);
-            order.push(start);
-            visited[start] = true;
-            for _ in 1..n {
-                let last = *order.last().unwrap();
-                if let Some(next) = (0..n).filter(|&i| !visited[i]).min_by(|&a, &b| {
-                    color_distance(&vectors[last], &vectors[a]).partial_cmp(&color_distance(&vectors[last], &vectors[b])).unwrap()
-                }) {
-                    order.push(next);
-                    visited[next] = true;
-                }
-            }
-            let (non_grey, grey): (Vec<usize>, Vec<usize>) = order.into_iter().partition(|&i| {
-                !is_grey_scheme(&schemes_with_data[i].1.palette)
-            });
-            let order: Vec<usize> = non_grey.into_iter().chain(grey).collect();
-            let mut color_order_map: HashMap<usize, usize> = HashMap::new();
-            for (pos, &orig_idx) in order.iter().enumerate() {
-                color_order_map.insert(orig_idx, pos);
-            }
+            let color_order_map: HashMap<&str, usize> = SCHEME_INDEX.color_sorted
+                .iter()
+                .enumerate()
+                .map(|(i, name)| (name.as_str(), i))
+                .collect();
 
-            for (i, (name, scheme_data, _, system)) in schemes_with_data.iter().enumerate() {
+            for (name, scheme_data, _, system) in &schemes_with_data {
                 let is_base24 = system == "base24";
                 let palette_svg = build_palette_svg(scheme_data, 224, 20, 14, is_base24);
                 let palette_grid_svg = build_palette_grid_svg(scheme_data, is_base24);
-                let color_pos = color_order_map.get(&i).copied().unwrap_or(i);
+                let color_pos = color_order_map.get(name.as_str()).copied().unwrap_or(0);
                 vec = vec.push_map(|map| {
                     map.insert_str("name", name.as_str())
                        .insert_str("palette-svg", &palette_svg)
@@ -801,13 +721,10 @@ async fn handle_help(
     Query(query): Query<FormatQuery>,
     headers: HeaderMap,
 ) -> Response {
-    let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
-    schemes.sort();
-
-    let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
-    templates.sort();
-
-    let help = HelpResponse { schemes, templates };
+    let help = HelpResponse {
+        schemes: SCHEME_INDEX.names_sorted.clone(),
+        templates: TEMPLATE_INDEX.sorted_names(),
+    };
 
     let wants_json = query.format.as_deref() == Some("json")
         || headers.get("accept")
@@ -849,30 +766,23 @@ async fn handle_help(
 async fn handle_scheme_template(
     Path(SchemeTemplatePath { scheme, template }): Path<SchemeTemplatePath>
 ) -> Response {
-    let scheme = sanitize_name(&scheme);
-    let template = sanitize_name(&template);
+    let sanitized_scheme = sanitize_name(&scheme);
+    let sanitized_template = sanitize_name(&template);
 
-    let exact_match = SCHEME_INDEX.find_exact(&scheme);
-    let scheme_info = match exact_match {
-        Some(info) => {
-            // Redirect if requested name doesn't match canonical name (case mismatch)
-            if scheme != info.name {
-                return Redirect::permanent(&format!("/{}/{}", info.name, template)).into_response();
-            }
-            info
+    let scheme_info = if let Some(info) = SCHEME_INDEX.find_exact(&sanitized_scheme) {
+        if scheme != info.name {
+            return Redirect::permanent(&format!("/{}/{}", info.name, sanitized_template)).into_response();
         }
-        None => {
-            // Try fuzzy match and redirect if found (typos)
-            if let Some(info) = SCHEME_INDEX.find_fuzzy(&scheme, 0.8) {
-                return Redirect::permanent(&format!("/{}/{}", info.name, template)).into_response();
-            }
-            return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", scheme)).into_response();
-        }
+        info
+    } else if let Some(info) = SCHEME_INDEX.find_fuzzy(&sanitized_scheme, 0.8) {
+        return Redirect::permanent(&format!("/{}/{}", info.name, sanitized_template)).into_response();
+    } else {
+        return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", sanitized_scheme)).into_response();
     };
 
-    let template_info = match TEMPLATE_INDEX.find(&template) {
+    let template_info = match TEMPLATE_INDEX.find(&sanitized_template) {
         Some(info) => info,
-        None => return (StatusCode::NOT_FOUND, format!("Template '{}' not found", template)).into_response(),
+        None => return (StatusCode::NOT_FOUND, format!("Template '{}' not found", sanitized_template)).into_response(),
     };
 
     let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
@@ -966,7 +876,7 @@ async fn handle_scheme_template(
 }
 
 async fn handle_random(Query(query): Query<FormatQuery>) -> Redirect {
-    let scheme = SCHEME_INDEX.names
+    let scheme = SCHEME_INDEX.names_sorted
         .choose(&mut rand::thread_rng())
         .map(|s| s.as_str())
         .unwrap_or("monokai");
@@ -1167,6 +1077,21 @@ mod tests {
         let app = create_app();
         let response = app
             .oneshot(Request::builder().uri("/monoki").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::PERMANENT_REDIRECT);
+        assert_eq!(
+            response.headers().get("location").unwrap(),
+            "/monokai"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scheme_redirect_with_trailing_punctuation() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai%20.!").body(Body::empty()).unwrap())
             .await
             .unwrap();
 
