@@ -84,6 +84,7 @@
 
         .hex-color { padding: 0 2px; cursor: pointer; transition: background 0.05s; }
         .hex-color:hover { background: var(--fg); }
+        .hex-color.active { outline: 2px solid var(--accent); outline-offset: 1px; }
 
         .yaml-block {
             position: relative;
@@ -122,8 +123,8 @@
 <body>
     <div class="container">
         <div class="nav">
-            <a id="back-link" href="/">&larr; back</a>
-            <a href="/--random">random</a>
+            <a id="back-link" href="/" title="base03">&larr; back</a>
+            <a href="/--random" title="base03">random</a>
         </div>
         <script>
             const ref = document.referrer;
@@ -134,53 +135,66 @@
         </script>
 
         <header>
-            <h1>{{scheme-name}}</h1>
-            <p>{{scheme-system}} / {{scheme-author}}</p>
+            <h1 title="base05">{{scheme-name}}</h1>
+            <p title="base03">{{scheme-system}} / {{scheme-author}}</p>
         </header>
 
         <div class="palette">{{{palette-svg}}}</div>
 
         <section>
-            <h2>Preview</h2>
+            <h2 title="base03">Preview</h2>
             <div class="code-examples">
                 <div class="code-block">
-                    <div class="code-label">Rust</div>
-                    <pre><span class="comment">// Check if prime</span>
-<span class="keyword">fn</span> <span class="function">is_prime</span>(n: <span class="keyword">u32</span>) -> <span class="keyword">bool</span> {
-    <span class="keyword">if</span> n < <span class="number">2</span> { <span class="keyword">return false</span> }
-    (<span class="number">2</span>..n).<span class="function">all</span>(|i| n % i != <span class="number">0</span>)
+                    <div class="code-label" title="base03">Rust</div>
+                    <pre title="base05"><span class="comment" title="base03">// Check if prime</span>
+<span class="keyword" title="base0E">fn</span> <span class="function" title="base0D">is_prime</span>(n: <span class="keyword" title="base0E">u32</span>) -> <span class="keyword" title="base0E">bool</span> {
+    <span class="keyword" title="base0E">if</span> n < <span class="number" title="base09">2</span> { <span class="keyword" title="base0E">return false</span> }
+    (<span class="number" title="base09">2</span>..n).<span class="function" title="base0D">all</span>(|i| n % i != <span class="number" title="base09">0</span>)
 }</pre>
                 </div>
                 <div class="code-block">
-                    <div class="code-label">Clojure</div>
-                    <pre><span class="comment">;; Calculate factorial</span>
-(<span class="keyword">defn</span> factorial [n]
-  (<span class="keyword">if</span> (<span class="function">&lt;=</span> n <span class="number">1</span>)
-    <span class="number">1</span>
-    (<span class="function">*</span> n (factorial (<span class="function">dec</span> n)))))</pre>
+                    <div class="code-label" title="base03">Clojure</div>
+                    <pre title="base05"><span class="comment" title="base03">;; Calculate factorial</span>
+(<span class="keyword" title="base0E">defn</span> factorial [n]
+  (<span class="keyword" title="base0E">if</span> (<span class="function" title="base0D">&lt;=</span> n <span class="number" title="base09">1</span>)
+    <span class="number" title="base09">1</span>
+    (<span class="function" title="base0D">*</span> n (factorial (<span class="function" title="base0D">dec</span> n)))))</pre>
                 </div>
                 <div class="code-block">
-                    <div class="code-label">HTML</div>
-                    <pre><span class="comment">&lt;!-- Page header --&gt;</span>
-&lt;<span class="keyword">div</span> <span class="keyword">class</span>=<span class="string">"container"</span>&gt;
-  &lt;<span class="keyword">h1</span>&gt;Hello World&lt;/<span class="keyword">h1</span>&gt;
-  &lt;<span class="keyword">p</span>&gt;Welcome!&lt;/<span class="keyword">p</span>&gt;
-&lt;/<span class="keyword">div</span>&gt;</pre>
+                    <div class="code-label" title="base03">HTML</div>
+                    <pre title="base05"><span class="comment" title="base03">&lt;!-- Page header --&gt;</span>
+&lt;<span class="keyword" title="base0E">div</span> <span class="keyword" title="base0E">class</span>=<span class="string" title="base0B">"container"</span>&gt;
+  &lt;<span class="keyword" title="base0E">h1</span>&gt;Hello World&lt;/<span class="keyword" title="base0E">h1</span>&gt;
+  &lt;<span class="keyword" title="base0E">p</span>&gt;Welcome!&lt;/<span class="keyword" title="base0E">p</span>&gt;
+&lt;/<span class="keyword" title="base0E">div</span>&gt;</pre>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>YAML</h2>
+            <h2 title="base03">YAML</h2>
             <div class="yaml-block">
                 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('yaml').textContent)">copy</button>
                 <pre id="yaml">{{{yaml-colorized}}}</pre>
             </div>
         </section>
 
-        <footer>
+        <footer title="base03">
             base16 / base24 color schemes
         </footer>
     </div>
+    <script>
+        document.querySelectorAll('.hex-color').forEach(el => {
+            el.addEventListener('click', () => {
+                document.querySelectorAll('.hex-color.active').forEach(a => a.classList.remove('active'));
+                el.classList.add('active');
+                const color = el.style.color;
+                const base = el.dataset.base || color;
+                document.documentElement.style.setProperty('--fg', color);
+                document.documentElement.style.setProperty('--muted', color);
+                document.querySelectorAll('[title^="base"]').forEach(t => t.title = base);
+            });
+        });
+    </script>
 </body>
 </html>

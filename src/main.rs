@@ -257,18 +257,27 @@ fn colorize_yaml_hex_values(yaml: &str, fg_hex: &str) -> String {
 
     yaml.lines()
         .map(|line| {
-            // First colorize hex values in the line
+            // Check if this is a baseXX line first
+            let base_name = base_pattern.captures(line)
+                .and_then(|caps| caps.get(2))
+                .map(|m| m.as_str().to_string());
+
+            // Colorize hex values, including base name as data attribute if available
             let colored_line = hex_pattern.replace_all(line, |caps: &regex::Captures| {
                 let full_match = caps.get(0).unwrap().as_str();
                 let hex_color = caps.get(1).unwrap().as_str();
-                format!(r#"<span class="hex-color" style="--fg: #{}; color: {};">{}</span>"#,
-                    fg_hex, hex_color, full_match)
+                if let Some(ref base) = base_name {
+                    format!(r#"<span class="hex-color" data-base="{}" style="--fg: #{}; color: {};">{}</span>"#,
+                        base, fg_hex, hex_color, full_match)
+                } else {
+                    format!(r#"<span class="hex-color" style="--fg: #{}; color: {};">{}</span>"#,
+                        fg_hex, hex_color, full_match)
+                }
             });
 
-            // Then wrap with tooltip if it's a baseXX line
-            if let Some(caps) = base_pattern.captures(line) {
-                let base_name = caps.get(2).unwrap().as_str();
-                if let Some(desc) = get_base_description(base_name) {
+            // Wrap with tooltip if it's a baseXX line
+            if let Some(base) = &base_name {
+                if let Some(desc) = get_base_description(base) {
                     return format!(r#"<span class="palette-row" title="{}">{}</span>"#, desc, colored_line);
                 }
             }
