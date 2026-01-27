@@ -199,6 +199,8 @@ struct IndexQuery {
     view: Option<String>,
     #[serde(default)]
     format: Option<String>,
+    #[serde(default)]
+    filter: Option<String>,
 }
 
 
@@ -276,30 +278,78 @@ fn colorize_yaml_hex_values(yaml: &str, fg_hex: &str) -> String {
         .join("\n")
 }
 
-fn build_palette_svg(scheme_data: &SchemeYaml, width: u32, height: u32, rect_width: u32) -> String {
-    let mut svg = format!(r#"<svg viewBox="0 0 {} {}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">"#, width, height);
-    for i in 0..16 {
-        let color = scheme_data.palette.get(&format!("base{:02X}", i))
-            .cloned()
-            .unwrap_or_else(|| "#000000".to_string());
-        svg.push_str(&format!(r#"<rect x="{}" y="0" width="{}" height="{}" fill="{}"/>"#, i * rect_width, rect_width, height, color));
+fn build_palette_svg(scheme_data: &SchemeYaml, width: u32, height: u32, rect_width: u32, is_base24: bool) -> String {
+    if is_base24 {
+        // Double height for two rows
+        let total_height = height * 2;
+        let mut svg = format!(r#"<svg viewBox="0 0 {} {}" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">"#, width, total_height);
+        // First row: base00-base0F
+        for i in 0..16 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            svg.push_str(&format!(r#"<rect x="{}" y="0" width="{}" height="{}" fill="{}"/>"#, i * rect_width, rect_width, height, color));
+        }
+        // Second row: base10-base17 (8 colors, double width)
+        let wide_rect = rect_width * 2;
+        for i in 0..8 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", 0x10 + i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            svg.push_str(&format!(r#"<rect x="{}" y="{}" width="{}" height="{}" fill="{}"/>"#, i * wide_rect, height, wide_rect, height, color));
+        }
+        svg.push_str("</svg>");
+        svg
+    } else {
+        let mut svg = format!(r#"<svg viewBox="0 0 {} {}" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">"#, width, height);
+        for i in 0..16 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            svg.push_str(&format!(r#"<rect x="{}" y="0" width="{}" height="{}" fill="{}"/>"#, i * rect_width, rect_width, height, color));
+        }
+        svg.push_str("</svg>");
+        svg
     }
-    svg.push_str("</svg>");
-    svg
 }
 
-fn build_palette_grid_svg(scheme_data: &SchemeYaml) -> String {
-    let mut svg = String::from(r#"<svg viewBox="0 0 4 4" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">"#);
-    for i in 0..16 {
-        let color = scheme_data.palette.get(&format!("base{:02X}", i))
-            .cloned()
-            .unwrap_or_else(|| "#000000".to_string());
-        let x = i % 4;
-        let y = i / 4;
-        svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
+fn build_palette_grid_svg(scheme_data: &SchemeYaml, is_base24: bool) -> String {
+    if is_base24 {
+        // Top half: 4x4 grid for base00-base0F, bottom half: 4x2 grid for base10-base17
+        let mut svg = String::from(r#"<svg viewBox="0 0 4 6" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">"#);
+        // Base16 colors (4x4)
+        for i in 0..16 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            let x = i % 4;
+            let y = i / 4;
+            svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
+        }
+        // Base24 extra colors (4x2)
+        for i in 0..8 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", 0x10 + i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            let x = i % 4;
+            let y = 4 + i / 4;
+            svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
+        }
+        svg.push_str("</svg>");
+        svg
+    } else {
+        let mut svg = String::from(r#"<svg viewBox="0 0 4 4" preserveAspectRatio="none" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">"#);
+        for i in 0..16 {
+            let color = scheme_data.palette.get(&format!("base{:02X}", i))
+                .cloned()
+                .unwrap_or_else(|| "#000000".to_string());
+            let x = i % 4;
+            let y = i / 4;
+            svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
+        }
+        svg.push_str("</svg>");
+        svg
     }
-    svg.push_str("</svg>");
-    svg
 }
 
 #[derive(Deserialize)]
@@ -378,7 +428,8 @@ async fn handle_scheme(
         };
 
         let fg = scheme_data.palette.get("base05").cloned().unwrap_or_else(|| "#ffffff".to_string()).trim_start_matches('#').to_string();
-        let palette_svg = build_palette_svg(&scheme_data, 320, 40, 20);
+        let is_base24 = scheme_info.system == "base24";
+        let palette_svg = build_palette_svg(&scheme_data, 320, 40, 20, is_base24);
 
         let mut data = MapBuilder::new()
             .insert_str("scheme-name", &scheme_data.name)
@@ -463,29 +514,40 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
 
     let sort_by_color = query.sort.as_deref() == Some("color");
     let view_grid = query.view.as_deref() == Some("grid");
+    let filter = query.filter.as_deref().unwrap_or("all");
+    let filter_base16 = filter == "base16";
+    let filter_base24 = filter == "base24";
 
-    let mut schemes_with_data: Vec<(String, SchemeYaml, String)> = SCHEME_INDEX
+    let mut schemes_with_data: Vec<(String, SchemeYaml, String, String)> = SCHEME_INDEX
         .schemes
         .iter()
         .filter_map(|(name, info)| {
             let yaml_str = std::fs::read_to_string(&info.path).ok()?;
             let scheme_data: SchemeYaml = serde_yaml::from_str(&yaml_str).ok()?;
-            Some((name.clone(), scheme_data, info.path.clone()))
+            Some((name.clone(), scheme_data, info.path.clone(), info.system.clone()))
         })
         .collect();
 
     // Always sort alphabetically - color order is handled via CSS
-    schemes_with_data.sort_by(|(name_a, _, _), (name_b, _, _)| name_a.cmp(name_b));
+    schemes_with_data.sort_by(|(name_a, _, _, _), (name_b, _, _, _)| name_a.cmp(name_b));
 
     let mut template_names: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
     template_names.sort();
 
+    let base16_count = schemes_with_data.iter().filter(|(_, _, _, sys)| sys == "base16").count();
+    let base24_count = schemes_with_data.iter().filter(|(_, _, _, sys)| sys == "base24").count();
+
     let data = MapBuilder::new()
         .insert_str("scheme-count", schemes_with_data.len().to_string())
+        .insert_str("base16-count", base16_count.to_string())
+        .insert_str("base24-count", base24_count.to_string())
         .insert_str("template-count", template_names.len().to_string())
         .insert_bool("sort-by-name", !sort_by_color)
         .insert_bool("sort-by-color", sort_by_color)
         .insert_bool("view-grid", view_grid)
+        .insert_bool("filter-all", !filter_base16 && !filter_base24)
+        .insert_bool("filter-base16", filter_base16)
+        .insert_bool("filter-base24", filter_base24)
         .insert_vec("schemes", |mut vec| {
             // Build color-sorted order index
             let color_keys = [
@@ -504,7 +566,7 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
             let color_distance = |a: &[f64], b: &[f64]| -> f64 {
                 a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
             };
-            let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, s, _)| scheme_to_vector(&s.palette)).collect();
+            let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, s, _, _)| scheme_to_vector(&s.palette)).collect();
             let n = schemes_with_data.len();
             let mut visited = vec![false; n];
             let mut order = Vec::with_capacity(n);
@@ -527,15 +589,19 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
                 color_order_map.insert(orig_idx, pos);
             }
 
-            for (i, (name, scheme_data, _)) in schemes_with_data.iter().enumerate() {
-                let palette_svg = build_palette_svg(scheme_data, 224, 20, 14);
-                let palette_grid_svg = build_palette_grid_svg(scheme_data);
+            for (i, (name, scheme_data, _, system)) in schemes_with_data.iter().enumerate() {
+                let is_base24 = system == "base24";
+                let palette_svg = build_palette_svg(scheme_data, 224, 20, 14, is_base24);
+                let palette_grid_svg = build_palette_grid_svg(scheme_data, is_base24);
                 let color_pos = color_order_map.get(&i).copied().unwrap_or(i);
                 vec = vec.push_map(|map| {
                     map.insert_str("name", name.as_str())
                        .insert_str("palette-svg", &palette_svg)
                        .insert_str("palette-grid-svg", &palette_grid_svg)
                        .insert_str("color-order", color_pos.to_string())
+                       .insert_str("system", system.as_str())
+                       .insert_bool("is-base16", system == "base16")
+                       .insert_bool("is-base24", system == "base24")
                 });
             }
             vec

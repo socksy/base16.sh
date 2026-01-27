@@ -75,18 +75,19 @@
             transition: transform 0.2s;
         }
         .view-toggle.compact .chevron { transform: rotate(-90deg); }
-        .sort-links {
+        .sort-links, .filter-links {
             display: flex;
             gap: 12px;
             font-size: 12px;
-            margin-left: auto;
         }
-        .sort-links a {
+        .sort-links { margin-left: auto; }
+        .filter-links { margin-left: 24px; }
+        .sort-links a, .filter-links a {
             color: var(--muted);
             text-decoration: none;
         }
-        .sort-links a:hover { color: var(--fg); }
-        .sort-links a.active {
+        .sort-links a:hover, .filter-links a:hover { color: var(--fg); }
+        .sort-links a.active, .filter-links a.active {
             color: var(--fg);
             text-decoration: underline;
             text-underline-offset: 3px;
@@ -94,6 +95,8 @@
 
         .schemes { display: flex; flex-direction: column; gap: 1px; }
         .schemes.sort-color .scheme { order: var(--color-order); }
+        .schemes.filter-base16 .scheme[data-system="base24"] { display: none; }
+        .schemes.filter-base24 .scheme[data-system="base16"] { display: none; }
         .schemes.grid-view {
             display: grid;
             grid-template-columns: repeat(6, 1fr);
@@ -119,6 +122,7 @@
         .scheme:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
         .scheme-name { font-weight: 400; font-size: 18px; }
         .scheme-palette { height: 24px; }
+        .scheme[data-system="base24"] .scheme-palette-bar { height: 48px; }
         .scheme-palette svg { width: 100%; height: 100%; display: block; }
         .scheme-palette-grid { display: none; }
         .grid-view .scheme-palette-bar { display: none; }
@@ -190,14 +194,19 @@
                     <span class="chevron">▼</span>
                     <h2>Schemes ({{scheme-count}})</h2>
                 </div>
+                <div class="filter-links">
+                    <a href="#" onclick="setFilter('all'); return false" {{#filter-all}}class="active"{{/filter-all}}>all</a>
+                    <a href="#" onclick="setFilter('base16'); return false" {{#filter-base16}}class="active"{{/filter-base16}}>base16 ({{base16-count}})</a>
+                    <a href="#" onclick="setFilter('base24'); return false" {{#filter-base24}}class="active"{{/filter-base24}}>base24 ({{base24-count}})</a>
+                </div>
                 <div class="sort-links">
                     <a href="/?{{#view-grid}}view=grid{{/view-grid}}" onclick="setSort('name'); return false" {{#sort-by-name}}class="active"{{/sort-by-name}}>name</a>
                     <a href="/?sort=color{{#view-grid}}&view=grid{{/view-grid}}" onclick="setSort('color'); return false" {{#sort-by-color}}class="active"{{/sort-by-color}}>color</a>
                 </div>
             </div>
-            <div id="schemes" class="schemes{{#view-grid}} grid-view{{/view-grid}}{{#sort-by-color}} sort-color{{/sort-by-color}}">
+            <div id="schemes" class="schemes{{#view-grid}} grid-view{{/view-grid}}{{#sort-by-color}} sort-color{{/sort-by-color}}{{#filter-base16}} filter-base16{{/filter-base16}}{{#filter-base24}} filter-base24{{/filter-base24}}">
 {{#schemes}}
-                <a href="/{{name}}" class="scheme" style="--color-order: {{color-order}}">
+                <a href="/{{name}}" class="scheme" data-system="{{system}}" style="--color-order: {{color-order}}">
                     <span class="scheme-name">{{name}}</span>
                     <span class="scheme-palette scheme-palette-bar">{{{palette-svg}}}</span>
                     <span class="scheme-palette scheme-palette-grid">{{{palette-grid-svg}}}</span>
@@ -222,11 +231,17 @@
     <script>
         function updateUrl() {
             const params = new URLSearchParams();
-            if (document.getElementById('schemes').classList.contains('grid-view')) {
+            const schemes = document.getElementById('schemes');
+            if (schemes.classList.contains('grid-view')) {
                 params.set('view', 'grid');
             }
-            if (document.getElementById('schemes').classList.contains('sort-color')) {
+            if (schemes.classList.contains('sort-color')) {
                 params.set('sort', 'color');
+            }
+            if (schemes.classList.contains('filter-base16')) {
+                params.set('filter', 'base16');
+            } else if (schemes.classList.contains('filter-base24')) {
+                params.set('filter', 'base24');
             }
             const url = params.toString() ? '?' + params.toString() : '/';
             history.pushState({}, '', url);
@@ -247,6 +262,22 @@
                 schemes.classList.remove('sort-color');
                 links[0].classList.add('active');
                 links[1].classList.remove('active');
+            }
+            updateUrl();
+        }
+        function setFilter(mode) {
+            const schemes = document.getElementById('schemes');
+            const links = document.querySelectorAll('.filter-links a');
+            schemes.classList.remove('filter-base16', 'filter-base24');
+            links.forEach(l => l.classList.remove('active'));
+            if (mode === 'base16') {
+                schemes.classList.add('filter-base16');
+                links[1].classList.add('active');
+            } else if (mode === 'base24') {
+                schemes.classList.add('filter-base24');
+                links[2].classList.add('active');
+            } else {
+                links[0].classList.add('active');
             }
             updateUrl();
         }
