@@ -201,6 +201,48 @@
                 document.querySelectorAll('[title^="base"]').forEach(t => t.title = base);
             });
         });
+
+        // Vim-style keyboard navigation
+        let pendingG = false;
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const navLinks = document.querySelectorAll('.nav-center a');
+            const prev = navLinks[0];
+            const next = navLinks[1];
+            const back = document.getElementById('back-link');
+            const random = document.querySelector('.nav a[href*="random"]');
+            if (pendingG) {
+                pendingG = false;
+                if (e.key === 'i') { location.href = '/'; e.preventDefault(); }
+                return;
+            }
+            switch (e.key) {
+                case 'k':
+                    if (prev) { location.href = prev.href; e.preventDefault(); }
+                    break;
+                case 'j':
+                    if (next) { location.href = next.href; e.preventDefault(); }
+                    break;
+                case 'h':
+                case 'u':
+                case 'Escape':
+                case 'Backspace':
+                    if (back) { location.href = back.href; e.preventDefault(); }
+                    break;
+                case 'r':
+                    if (random) { location.href = random.href; e.preventDefault(); }
+                    break;
+                case 'g':
+                    pendingG = true;
+                    setTimeout(() => pendingG = false, 1000);
+                    e.preventDefault();
+                    break;
+                case '?':
+                    alert('Keyboard shortcuts:\n\nj     next scheme\nk     prev scheme\nh     back to index\nr     random scheme\ng i   go to index\n?     show this help');
+                    e.preventDefault();
+                    break;
+            }
+        });
     </script>
 </body>
 </html>

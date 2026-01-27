@@ -120,6 +120,7 @@
         }
         .scheme:hover { background: var(--fg); color: var(--bg); }
         .scheme:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        .scheme.kbd-selected { background: color-mix(in srgb, var(--fg) 20%, transparent); }
         .scheme-name { font-weight: 400; font-size: 18px; }
         .scheme-palette { height: 24px; }
         .scheme[data-system="base24"] .scheme-palette-bar { height: 48px; }
@@ -179,9 +180,35 @@
             font-size: 12px;
             color: var(--muted);
         }
+
+        .search-box {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+        .search-box.active { display: block; }
+        .search-box input {
+            font-family: inherit;
+            font-size: 18px;
+            padding: 12px 20px;
+            border: 2px solid var(--fg);
+            background: var(--bg);
+            color: var(--fg);
+            width: 400px;
+            max-width: 90vw;
+            outline: none;
+        }
+        .search-box input::placeholder { color: var(--muted); }
+        .scheme.search-hidden { display: none !important; }
     </style>
 </head>
 <body>
+    <div class="search-box" id="search-box">
+        <input type="text" id="search-input" placeholder="Search schemes...">
+    </div>
     <div class="container">
         <header>
             <h1>base16.sh</h1>
@@ -287,6 +314,84 @@
             if (link && this.classList.contains('sort-color')) {
                 e.preventDefault();
                 location.href = link.href + '?order=color';
+            }
+        });
+
+        // Quick search
+        const searchBox = document.getElementById('search-box');
+        const searchInput = document.getElementById('search-input');
+        function openSearch() {
+            searchBox.classList.add('active');
+            searchInput.value = '';
+            searchInput.focus();
+            document.querySelectorAll('.scheme').forEach(s => s.classList.remove('search-hidden'));
+        }
+        function closeSearch() {
+            searchBox.classList.remove('active');
+            searchInput.value = '';
+            document.querySelectorAll('.scheme').forEach(s => s.classList.remove('search-hidden'));
+        }
+        function filterSchemes(query) {
+            const q = query.toLowerCase();
+            document.querySelectorAll('.scheme').forEach(s => {
+                const name = s.querySelector('.scheme-name').textContent.toLowerCase();
+                s.classList.toggle('search-hidden', q && !name.includes(q));
+            });
+            kbdIndex = -1;
+            const visible = getVisibleSchemes();
+            if (visible.length > 0) updateKbdSelection(0);
+        }
+        searchInput.addEventListener('input', (e) => filterSchemes(e.target.value));
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { closeSearch(); e.preventDefault(); }
+            else if (e.key === 'Enter') { navigateToSelected(); e.preventDefault(); }
+            else if (e.key === 'ArrowDown' || (e.key === 'n' && e.ctrlKey)) { updateKbdSelection(kbdIndex + 1); e.preventDefault(); }
+            else if (e.key === 'ArrowUp' || (e.key === 'p' && e.ctrlKey)) { updateKbdSelection(kbdIndex - 1); e.preventDefault(); }
+        });
+
+        // Vim-style keyboard navigation
+        let kbdIndex = -1;
+        function getVisibleSchemes() {
+            const schemes = document.getElementById('schemes');
+            return Array.from(schemes.querySelectorAll('.scheme')).filter(s => {
+                return getComputedStyle(s).display !== 'none';
+            });
+        }
+        function updateKbdSelection(newIndex) {
+            const visible = getVisibleSchemes();
+            if (visible.length === 0) return;
+            document.querySelectorAll('.scheme.kbd-selected').forEach(s => s.classList.remove('kbd-selected'));
+            kbdIndex = Math.max(0, Math.min(newIndex, visible.length - 1));
+            const selected = visible[kbdIndex];
+            selected.classList.add('kbd-selected');
+            selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+        function navigateToSelected() {
+            const visible = getVisibleSchemes();
+            if (kbdIndex >= 0 && kbdIndex < visible.length) {
+                const link = visible[kbdIndex];
+                const schemes = document.getElementById('schemes');
+                location.href = schemes.classList.contains('sort-color') ? link.href + '?order=color' : link.href;
+            }
+        }
+        document.addEventListener('keydown', function(e) {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const visible = getVisibleSchemes();
+            const schemes = document.getElementById('schemes');
+            switch (e.key) {
+                case 'j': updateKbdSelection(kbdIndex + 1); e.preventDefault(); break;
+                case 'k': updateKbdSelection(kbdIndex - 1); e.preventDefault(); break;
+                case 'g': if (!e.shiftKey) { updateKbdSelection(0); e.preventDefault(); } break;
+                case 'G': updateKbdSelection(visible.length - 1); e.preventDefault(); break;
+                case 'Enter': navigateToSelected(); e.preventDefault(); break;
+                case 'o': setSort(schemes.classList.contains('sort-color') ? 'name' : 'color'); e.preventDefault(); break;
+                case ' ': toggleView(); e.preventDefault(); break;
+                case '/': openSearch(); e.preventDefault(); break;
+                case 'Escape': closeSearch(); e.preventDefault(); break;
+                case '?':
+                    alert('Keyboard shortcuts:\n\nj       next scheme\nk       prev scheme\ng       first scheme\nG       last scheme\nEnter   open scheme\no       toggle sort (name/color)\nSpace   toggle view (list/grid)\n/       search\nEsc     close search\n?       show this help');
+                    e.preventDefault();
+                    break;
             }
         });
     </script>
