@@ -45,6 +45,8 @@ struct SchemeInfo {
 struct SchemeIndex {
     schemes: HashMap<String, SchemeInfo>,
     names: Vec<String>,
+    names_sorted: Vec<String>,
+    color_sorted: Vec<String>,
 }
 
 impl SchemeIndex {
@@ -74,9 +76,124 @@ impl SchemeIndex {
         }
 
         let names: Vec<String> = schemes.keys().cloned().collect();
+
+        // Pre-compute name-sorted order
+        let mut names_sorted: Vec<String> = schemes.keys().cloned().collect();
+        names_sorted.sort();
+
+        // Pre-compute color-sorted order
+        let color_sorted = Self::compute_color_order(&schemes);
+
         tracing::info!("Loaded {} schemes into index", schemes.len());
 
-        Ok(SchemeIndex { schemes, names })
+        Ok(SchemeIndex { schemes, names, names_sorted, color_sorted })
+    }
+
+    fn compute_color_order(schemes: &HashMap<String, SchemeInfo>) -> Vec<String> {
+        let color_keys = [
+            "base00", "base01", "base02", "base03", "base04", "base05", "base06", "base07",
+            "base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F",
+        ];
+
+        let scheme_to_vector = |palette: &HashMap<String, String>| -> Vec<f64> {
+            color_keys.iter().flat_map(|key| {
+                let hex = palette.get(*key).map(|s| s.as_str()).unwrap_or("#000000").trim_start_matches('#');
+                if hex.len() >= 6 {
+                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
+                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
+                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
+                    [r, g, b]
+                } else {
+                    [0.0, 0.0, 0.0]
+                }
+            }).collect()
+        };
+
+        let color_distance = |a: &[f64], b: &[f64]| -> f64 {
+            a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+        };
+
+        let is_grey_scheme = |palette: &HashMap<String, String>| -> bool {
+            let accent_keys = ["base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F"];
+            let mut grey_count = 0;
+            for key in accent_keys {
+                if let Some(hex) = palette.get(key) {
+                    let hex = hex.trim_start_matches('#');
+                    if hex.len() >= 6 {
+                        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64 / 255.0;
+                        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64 / 255.0;
+                        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64 / 255.0;
+                        let max = r.max(g).max(b);
+                        let min = r.min(g).min(b);
+                        let saturation = if max == 0.0 { 0.0 } else { (max - min) / max };
+                        if saturation < 0.2 {
+                            grey_count += 1;
+                        }
+                    }
+                }
+            }
+            grey_count >= 5
+        };
+
+        // Load scheme data and compute color vectors
+        let mut schemes_with_data: Vec<(String, HashMap<String, String>)> = schemes
+            .iter()
+            .filter_map(|(name, info)| {
+                let yaml_str = std::fs::read_to_string(&info.path).ok()?;
+                let scheme_data: SchemeYaml = serde_yaml::from_str(&yaml_str).ok()?;
+                Some((name.clone(), scheme_data.palette))
+            })
+            .collect();
+
+        // Sort alphabetically first for consistent starting point
+        schemes_with_data.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+        let n = schemes_with_data.len();
+        if n == 0 {
+            return Vec::new();
+        }
+
+        let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, p)| scheme_to_vector(p)).collect();
+
+        // Nearest-neighbor traversal starting from darkest
+        let mut visited = vec![false; n];
+        let mut order = Vec::with_capacity(n);
+        let start = vectors.iter().enumerate().min_by(|(_, a), (_, b)| {
+            (a[0] + a[1] + a[2]).partial_cmp(&(b[0] + b[1] + b[2])).unwrap()
+        }).map(|(i, _)| i).unwrap_or(0);
+        order.push(start);
+        visited[start] = true;
+
+        for _ in 1..n {
+            let last = *order.last().unwrap();
+            if let Some(next) = (0..n).filter(|&i| !visited[i]).min_by(|&a, &b| {
+                color_distance(&vectors[last], &vectors[a]).partial_cmp(&color_distance(&vectors[last], &vectors[b])).unwrap()
+            }) {
+                order.push(next);
+                visited[next] = true;
+            }
+        }
+
+        // Partition grey schemes to end
+        let (non_grey, grey): (Vec<usize>, Vec<usize>) = order.into_iter().partition(|&i| {
+            !is_grey_scheme(&schemes_with_data[i].1)
+        });
+        let order: Vec<usize> = non_grey.into_iter().chain(grey).collect();
+
+        order.iter().map(|&i| schemes_with_data[i].0.clone()).collect()
+    }
+
+    fn get_neighbors(&self, name: &str, by_color: bool) -> (Option<&str>, Option<&str>) {
+        let list = if by_color { &self.color_sorted } else { &self.names_sorted };
+        let pos = list.iter().position(|n| n == name);
+        match pos {
+            Some(i) => {
+                let prev = if i > 0 { list.get(i - 1).map(|s| s.as_str()) } else { None };
+                let next = list.get(i + 1).map(|s| s.as_str());
+                (prev, next)
+            }
+            None => (None, None),
+        }
     }
 
     fn find_exact(&self, name: &str) -> Option<&SchemeInfo> {
@@ -189,6 +306,8 @@ struct SchemeYaml {
 struct FormatQuery {
     #[serde(default)]
     format: Option<String>,
+    #[serde(default)]
+    order: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -440,12 +559,31 @@ async fn handle_scheme(
         let is_base24 = scheme_info.system == "base24";
         let palette_svg = build_palette_svg(&scheme_data, 320, 40, 20, is_base24);
 
+        // Determine sort order and compute prev/next
+        let by_color = query.order.as_deref() == Some("color");
+        let order_param = if by_color { "?order=color" } else { "" };
+        let (prev, next) = SCHEME_INDEX.get_neighbors(&scheme_info.name, by_color);
+
+        let random_href = if by_color { "/--random?order=color" } else { "/--random" };
+
         let mut data = MapBuilder::new()
             .insert_str("scheme-name", &scheme_data.name)
             .insert_str("scheme-author", &scheme_data.author)
             .insert_str("scheme-system", &scheme_info.system)
             .insert_str("palette-svg", &palette_svg)
-            .insert_str("yaml-colorized", colorize_yaml_hex_values(&scheme_yaml_str, &fg));
+            .insert_str("yaml-colorized", colorize_yaml_hex_values(&scheme_yaml_str, &fg))
+            .insert_str("random-href", random_href);
+
+        if let Some(prev_name) = prev {
+            data = data.insert_str("prev-scheme", prev_name)
+                       .insert_str("prev-href", format!("/{}{}", prev_name, order_param))
+                       .insert_bool("has-prev", true);
+        }
+        if let Some(next_name) = next {
+            data = data.insert_str("next-scheme", next_name)
+                       .insert_str("next-href", format!("/{}{}", next_name, order_param))
+                       .insert_bool("has-next", true);
+        }
 
         for (key, value) in &scheme_data.palette {
             let hex_value = value.trim_start_matches('#');
@@ -827,12 +965,13 @@ async fn handle_scheme_template(
         .unwrap()
 }
 
-async fn handle_random() -> Redirect {
+async fn handle_random(Query(query): Query<FormatQuery>) -> Redirect {
     let scheme = SCHEME_INDEX.names
         .choose(&mut rand::thread_rng())
         .map(|s| s.as_str())
         .unwrap_or("monokai");
-    Redirect::to(&format!("/{}", scheme))
+    let order_param = if query.order.as_deref() == Some("color") { "?order=color" } else { "" };
+    Redirect::to(&format!("/{}{}", scheme, order_param))
 }
 
 fn create_app() -> Router {

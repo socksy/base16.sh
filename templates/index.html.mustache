@@ -282,6 +282,13 @@
             updateUrl();
         }
         window.addEventListener('popstate', () => location.reload());
+        document.getElementById('schemes').addEventListener('click', function(e) {
+            const link = e.target.closest('.scheme');
+            if (link && this.classList.contains('sort-color')) {
+                e.preventDefault();
+                location.href = link.href + '?order=color';
+            }
+        });
     </script>
 </body>
 </html>

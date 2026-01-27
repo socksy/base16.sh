@@ -24,9 +24,11 @@
         }
         .container { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
 
-        .nav { display: flex; justify-content: space-between; }
+        .nav { display: flex; justify-content: space-between; align-items: center; }
         .nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
         .nav a:hover { color: var(--fg); }
+        .nav-center { display: flex; gap: 12px; align-items: center; }
+        .nav-center .disabled { color: var(--bg); font-size: 14px; }
 
         header { margin: 40px 0 60px; }
         h1 {
@@ -124,7 +126,11 @@
     <div class="container">
         <div class="nav">
             <a id="back-link" href="/" title="base03">&larr; back</a>
-            <a href="/--random" title="base03">random</a>
+            <span class="nav-center">
+                {{#has-prev}}<a href="{{prev-href}}" title="{{prev-scheme}}">&larr; prev</a>{{/has-prev}}{{^has-prev}}<span class="disabled">&larr; prev</span>{{/has-prev}}
+                {{#has-next}}<a href="{{next-href}}" title="{{next-scheme}}">next &rarr;</a>{{/has-next}}{{^has-next}}<span class="disabled">next &rarr;</span>{{/has-next}}
+            </span>
+            <a href="{{random-href}}" title="base03">random</a>
         </div>
         <script>
             const ref = document.referrer;
