@@ -137,6 +137,8 @@
             aspect-ratio: 1;
         }
         .grid-view .scheme:hover { background: transparent; }
+        .grid-view .scheme.kbd-selected { outline: 3px solid var(--accent); outline-offset: -3px; background: transparent; }
+        .grid-view .scheme.kbd-selected .scheme-name { opacity: 1; }
         .grid-view .scheme-name {
             position: absolute;
             bottom: 0;
@@ -256,6 +258,19 @@
         </footer>
     </div>
     <script>
+        // Restore scroll position when returning to index
+        const savedScroll = sessionStorage.getItem('indexScrollY');
+        const savedKbdIndex = sessionStorage.getItem('indexKbdIndex');
+        if (savedScroll) {
+            sessionStorage.removeItem('indexScrollY');
+            sessionStorage.removeItem('indexKbdIndex');
+            window.scrollTo(0, parseInt(savedScroll, 10));
+        }
+        function saveScrollAndNavigate(url, index) {
+            sessionStorage.setItem('indexScrollY', window.scrollY);
+            sessionStorage.setItem('indexKbdIndex', index);
+            location.href = url;
+        }
         function updateUrl() {
             const params = new URLSearchParams();
             const schemes = document.getElementById('schemes');
@@ -281,6 +296,23 @@
         function setSort(mode) {
             const schemes = document.getElementById('schemes');
             const links = document.querySelectorAll('.sort-links a');
+
+            // Find scroll anchor: hovered scheme, or kbd-selected, or closest to viewport center
+            let anchorScheme = document.querySelector('.scheme:hover') || document.querySelector('.scheme.kbd-selected');
+            if (!anchorScheme) {
+                let minDist = Infinity;
+                document.querySelectorAll('.scheme').forEach(s => {
+                    if (getComputedStyle(s).display === 'none') return;
+                    const rect = s.getBoundingClientRect();
+                    const dist = Math.abs(rect.top + rect.height / 2 - window.innerHeight / 2);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        anchorScheme = s;
+                    }
+                });
+            }
+            const anchorOffset = anchorScheme ? anchorScheme.getBoundingClientRect().top : 0;
+
             if (mode === 'color') {
                 schemes.classList.add('sort-color');
                 links[0].classList.remove('active');
@@ -290,11 +322,25 @@
                 links[0].classList.add('active');
                 links[1].classList.remove('active');
             }
+
+            // Scroll to keep anchor scheme in same viewport position
+            if (anchorScheme) {
+                const newRect = anchorScheme.getBoundingClientRect();
+                window.scrollBy(0, newRect.top - anchorOffset);
+            }
+
+            // Update kbdIndex if there was a selection
+            const selected = document.querySelector('.scheme.kbd-selected');
+            if (selected) {
+                const visible = getVisibleSchemes();
+                kbdIndex = visible.indexOf(selected);
+            }
             updateUrl();
         }
         function setFilter(mode) {
             const schemes = document.getElementById('schemes');
             const links = document.querySelectorAll('.filter-links a');
+            const selected = document.querySelector('.scheme.kbd-selected');
             schemes.classList.remove('filter-base16', 'filter-base24');
             links.forEach(l => l.classList.remove('active'));
             if (mode === 'base16') {
@@ -306,14 +352,29 @@
             } else {
                 links[0].classList.add('active');
             }
+            // Update kbdIndex to match new visible list
+            if (selected) {
+                const visible = getVisibleSchemes();
+                const newIndex = visible.indexOf(selected);
+                if (newIndex >= 0) {
+                    kbdIndex = newIndex;
+                } else {
+                    // Selected item is now hidden, clear selection
+                    selected.classList.remove('kbd-selected');
+                    kbdIndex = -1;
+                }
+            }
             updateUrl();
         }
         window.addEventListener('popstate', () => location.reload());
         document.getElementById('schemes').addEventListener('click', function(e) {
             const link = e.target.closest('.scheme');
-            if (link && this.classList.contains('sort-color')) {
+            if (link) {
                 e.preventDefault();
-                location.href = link.href + '?order=color';
+                const visible = getVisibleSchemes();
+                const index = visible.indexOf(link);
+                const url = this.classList.contains('sort-color') ? link.href + '?order=color' : link.href;
+                saveScrollAndNavigate(url, index);
             }
         });
 
@@ -353,9 +414,17 @@
         let kbdIndex = -1;
         function getVisibleSchemes() {
             const schemes = document.getElementById('schemes');
-            return Array.from(schemes.querySelectorAll('.scheme')).filter(s => {
+            const visible = Array.from(schemes.querySelectorAll('.scheme')).filter(s => {
                 return getComputedStyle(s).display !== 'none';
             });
+            if (schemes.classList.contains('sort-color')) {
+                visible.sort((a, b) => {
+                    const orderA = parseInt(a.style.getPropertyValue('--color-order')) || 0;
+                    const orderB = parseInt(b.style.getPropertyValue('--color-order')) || 0;
+                    return orderA - orderB;
+                });
+            }
+            return visible;
         }
         function updateKbdSelection(newIndex) {
             const visible = getVisibleSchemes();
@@ -366,21 +435,46 @@
             selected.classList.add('kbd-selected');
             selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
+        // Restore keyboard selection when returning to index
+        if (savedKbdIndex !== null) {
+            const idx = parseInt(savedKbdIndex, 10);
+            const visible = getVisibleSchemes();
+            if (idx >= 0 && idx < visible.length) {
+                kbdIndex = idx;
+                visible[idx].classList.add('kbd-selected');
+            }
+        }
         function navigateToSelected() {
             const visible = getVisibleSchemes();
             if (kbdIndex >= 0 && kbdIndex < visible.length) {
                 const link = visible[kbdIndex];
                 const schemes = document.getElementById('schemes');
-                location.href = schemes.classList.contains('sort-color') ? link.href + '?order=color' : link.href;
+                const url = schemes.classList.contains('sort-color') ? link.href + '?order=color' : link.href;
+                saveScrollAndNavigate(url, kbdIndex);
             }
+        }
+        function getGridColumns() {
+            const schemes = document.getElementById('schemes');
+            if (!schemes.classList.contains('grid-view')) return 1;
+            const visible = getVisibleSchemes();
+            if (visible.length < 2) return 1;
+            const firstTop = visible[0].getBoundingClientRect().top;
+            for (let i = 1; i < visible.length; i++) {
+                if (visible[i].getBoundingClientRect().top !== firstTop) return i;
+            }
+            return visible.length;
         }
         document.addEventListener('keydown', function(e) {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             const visible = getVisibleSchemes();
             const schemes = document.getElementById('schemes');
+            const cols = getGridColumns();
+            const isGrid = cols > 1;
             switch (e.key) {
-                case 'j': updateKbdSelection(kbdIndex + 1); e.preventDefault(); break;
-                case 'k': updateKbdSelection(kbdIndex - 1); e.preventDefault(); break;
+                case 'h': if (isGrid) { updateKbdSelection(kbdIndex - 1); e.preventDefault(); } break;
+                case 'j': updateKbdSelection(kbdIndex + cols); e.preventDefault(); break;
+                case 'k': updateKbdSelection(kbdIndex - cols); e.preventDefault(); break;
+                case 'l': if (isGrid) { updateKbdSelection(kbdIndex + 1); } else { navigateToSelected(); } e.preventDefault(); break;
                 case 'g': if (!e.shiftKey) { updateKbdSelection(0); e.preventDefault(); } break;
                 case 'G': updateKbdSelection(visible.length - 1); e.preventDefault(); break;
                 case 'Enter': navigateToSelected(); e.preventDefault(); break;
@@ -389,7 +483,7 @@
                 case '/': openSearch(); e.preventDefault(); break;
                 case 'Escape': closeSearch(); e.preventDefault(); break;
                 case '?':
-                    alert('Keyboard shortcuts:\n\nj       next scheme\nk       prev scheme\ng       first scheme\nG       last scheme\nEnter   open scheme\no       toggle sort (name/color)\nSpace   toggle view (list/grid)\n/       search\nEsc     close search\n?       show this help');
+                    alert('Keyboard shortcuts:\n\nhjkl    navigate (arrows in grid)\ng       first scheme\nG       last scheme\nl/Enter open scheme (list view)\nEnter   open scheme (grid view)\no       toggle sort (name/color)\nSpace   toggle view (list/grid)\n/       search\nEsc     close search\n?       show this help');
                     e.preventDefault();
                     break;
             }
