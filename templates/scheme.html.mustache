@@ -198,7 +198,9 @@
                 const base = el.dataset.base || color;
                 document.documentElement.style.setProperty('--fg', color);
                 document.documentElement.style.setProperty('--muted', color);
-                document.querySelectorAll('[title^="base"]').forEach(t => t.title = base);
+                document.querySelectorAll('[title^="base"]').forEach(t => {
+                    if (!t.closest('.code-examples')) t.title = base;
+                });
             });
         });
 
