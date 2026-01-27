@@ -265,7 +265,7 @@ fn colorize_yaml_hex_values(yaml: &str, fg_hex: &str) -> String {
 }
 
 fn build_palette_svg(scheme_data: &SchemeYaml, width: u32, height: u32, rect_width: u32) -> String {
-    let mut svg = format!(r#"<svg width="{}" height="{}" xmlns="http://www.w3.org/2000/svg">"#, width, height);
+    let mut svg = format!(r#"<svg viewBox="0 0 {} {}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">"#, width, height);
     for i in 0..16 {
         let color = scheme_data.palette.get(&format!("base{:02X}", i))
             .cloned()

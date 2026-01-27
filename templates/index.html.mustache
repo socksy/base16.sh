@@ -1,43 +1,132 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>base16.sh - All Themes</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>base16.sh</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: monospace; background: #1a1a1a; color: #ddd; padding: 20px; max-width: 1200px; margin: 0 auto; }
-        h1 { text-align: center; }
-        h2 { color: #6a9fb5; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; }
-        .schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 20px; }
-        .scheme-card { border: 1px solid #333; padding: 10px; display: block; text-decoration: none; }
-        .scheme-card:hover { background: #333; }
-        .scheme-name { color: #6a9fb5; margin-bottom: 5px; }
-        .scheme-palette { margin-top: 5px; }
-        .templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
-        .templates a { color: #6a9fb5; text-decoration: none; padding: 10px; border: 1px solid #333; display: block; }
-        .templates a:hover { background: #333; }
+        :root {
+            --bg: #fff;
+            --fg: #000;
+            --muted: #666;
+            --accent: #00f;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000;
+                --fg: #fff;
+                --muted: #888;
+                --accent: #0ff;
+            }
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Atkinson Hyperlegible Mono', monospace;
+            background: var(--bg);
+            color: var(--fg);
+            font-size: 15px;
+            line-height: 1.65;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+
+        header { margin-bottom: 60px; }
+        h1 {
+            font-size: 48px;
+            font-weight: 400;
+            letter-spacing: -2px;
+            line-height: 1;
+            margin-bottom: 8px;
+        }
+        header p { color: var(--muted); }
+        header a { color: var(--accent); }
+
+        section { margin-bottom: 60px; }
+        h2 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 400;
+            color: var(--muted);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--fg);
+        }
+
+        .schemes { display: flex; flex-direction: column; gap: 1px; }
+        .scheme {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            gap: 40px;
+            padding: 16px 12px;
+            margin: 0 -12px;
+            text-decoration: none;
+            color: inherit;
+            transition: background-color 0.1s, color 0.1s;
+        }
+        .scheme:hover { background: var(--fg); color: var(--bg); }
+        .scheme:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+        .scheme-name { font-weight: 400; font-size: 18px; }
+        .scheme-palette { height: 24px; }
+        .scheme-palette svg { width: 100%; height: 100%; display: block; }
+
+        .templates {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .template {
+            color: var(--fg);
+            text-decoration: none;
+            padding: 4px 0;
+            border-bottom: 1px solid transparent;
+        }
+        .template:hover { border-bottom-color: var(--fg); }
+        .template::after { content: ','; color: var(--muted); }
+        .template:last-child::after { content: ''; }
+
+        footer {
+            margin-top: 80px;
+            padding-top: 20px;
+            border-top: 1px solid var(--fg);
+            font-size: 12px;
+            color: var(--muted);
+        }
     </style>
 </head>
 <body>
-    <h1>base16.sh</h1>
-    <p style="text-align: center;">Base16/Base24 theme server - <a href="/--help" style="color: #6a9fb5;">API docs</a></p>
+    <div class="container">
+        <header>
+            <h1>base16.sh</h1>
+            <p>color schemes for terminals + editors / <a href="/--help">api</a></p>
+        </header>
 
-    <h2>Schemes ({{scheme-count}})</h2>
-    <p>Click any theme to see preview with code examples</p>
-    <div class="schemes">
+        <section>
+            <h2>Schemes ({{scheme-count}})</h2>
+            <div class="schemes">
 {{#schemes}}
-        <a href="/{{name}}" class="scheme-card">
-            <div class="scheme-name">{{name}}</div>
-            <div class="scheme-palette">{{{palette-svg}}}</div>
-        </a>
+                <a href="/{{name}}" class="scheme">
+                    <span class="scheme-name">{{name}}</span>
+                    <span class="scheme-palette">{{{palette-svg}}}</span>
+                </a>
 {{/schemes}}
-    </div>
+            </div>
+        </section>
 
-    <h2>Templates ({{template-count}})</h2>
-    <p>Use with any scheme: /{scheme}/{template}</p>
-    <div class="templates">
+        <section>
+            <h2>Templates ({{template-count}})</h2>
+            <div class="templates">
 {{#templates}}
-        <a href="/monokai/{{name}}">{{name}}</a>
+                <a href="/monokai/{{name}}" class="template">{{name}}</a>
 {{/templates}}
+            </div>
+        </section>
+
+        <footer>
+            base16 / base24 color schemes
+        </footer>
     </div>
 </body>
 </html>
