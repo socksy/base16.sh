@@ -575,6 +575,25 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
             let color_distance = |a: &[f64], b: &[f64]| -> f64 {
                 a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
             };
+            let is_grey_scheme = |palette: &HashMap<String, String>| -> bool {
+                let accent_keys = ["base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F"];
+                let mut grey_count = 0;
+                for key in accent_keys {
+                    if let Some(hex) = palette.get(key) {
+                        let hex = hex.trim_start_matches('#');
+                        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64 / 255.0;
+                        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64 / 255.0;
+                        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64 / 255.0;
+                        let max = r.max(g).max(b);
+                        let min = r.min(g).min(b);
+                        let saturation = if max == 0.0 { 0.0 } else { (max - min) / max };
+                        if saturation < 0.2 {
+                            grey_count += 1;
+                        }
+                    }
+                }
+                grey_count >= 5
+            };
             let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, s, _, _)| scheme_to_vector(&s.palette)).collect();
             let n = schemes_with_data.len();
             let mut visited = vec![false; n];
@@ -593,6 +612,10 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
                     visited[next] = true;
                 }
             }
+            let (non_grey, grey): (Vec<usize>, Vec<usize>) = order.into_iter().partition(|&i| {
+                !is_grey_scheme(&schemes_with_data[i].1.palette)
+            });
+            let order: Vec<usize> = non_grey.into_iter().chain(grey).collect();
             let mut color_order_map: HashMap<usize, usize> = HashMap::new();
             for (pos, &orig_idx) in order.iter().enumerate() {
                 color_order_map.insert(orig_idx, pos);
