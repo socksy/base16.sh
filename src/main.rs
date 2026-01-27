@@ -742,11 +742,18 @@ async fn handle_help(
     } else {
         let mut text = String::from("base16.sh - Base16/Base24 Theme Server\n\n");
 
-        text.push_str("Usage:\n");
-        text.push_str("  GET /{scheme}              - get scheme YAML\n");
-        text.push_str("  GET /{scheme}?format=json  - get scheme JSON\n");
-        text.push_str("  GET /{scheme}/{template}   - render template\n");
-        text.push_str("  GET /--help                - this help\n\n");
+        text.push_str("Endpoints:\n");
+        text.push_str("  GET /                      - list schemes and templates (HTML/JSON/YAML)\n");
+        text.push_str("  GET /{scheme}              - scheme colors (YAML/JSON)\n");
+        text.push_str("  GET /{scheme}/{template}   - render scheme through template\n");
+        text.push_str("  GET /--random              - redirect to random scheme\n");
+        text.push_str("  GET /--help                - this help (text/JSON)\n");
+        text.push_str("\nFormat selection:\n");
+        text.push_str("  ?format=json|yaml|html     - explicit format\n");
+        text.push_str("  Accept: application/json   - content negotiation\n");
+        text.push_str("  Accept: application/yaml\n");
+        text.push_str("\nFuzzy matching:\n");
+        text.push_str("  Scheme names are fuzzy matched (e.g. /monoki -> /monokai)\n\n");
 
         text.push_str(&format!("Schemes ({})\n", help.schemes.len()));
         for scheme in &help.schemes {
