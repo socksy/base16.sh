@@ -122,9 +122,16 @@
 <body>
     <div class="container">
         <div class="nav">
-            <a href="/">&larr; back</a>
+            <a id="back-link" href="/">&larr; back</a>
             <a href="/--random">random</a>
         </div>
+        <script>
+            const ref = document.referrer;
+            if (ref && new URL(ref).origin === location.origin) {
+                const params = new URL(ref).search;
+                if (params) document.getElementById('back-link').href = '/' + params;
+            }
+        </script>
 
         <header>
             <h1>{{scheme-name}}</h1>

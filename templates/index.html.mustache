@@ -44,18 +44,67 @@
         header a { color: var(--accent); }
 
         section { margin-bottom: 60px; }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--fg);
+        }
         h2 {
             font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 2px;
             font-weight: 400;
             color: var(--muted);
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--fg);
+            margin: 0;
+        }
+        .view-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            text-decoration: none;
+            color: inherit;
+        }
+        .view-toggle:hover h2 { color: var(--fg); }
+        .chevron {
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        .view-toggle.compact .chevron { transform: rotate(-90deg); }
+        .sort-links {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            margin-left: auto;
+        }
+        .sort-links a {
+            color: var(--muted);
+            text-decoration: none;
+        }
+        .sort-links a:hover { color: var(--fg); }
+        .sort-links a.active {
+            color: var(--fg);
+            text-decoration: underline;
+            text-underline-offset: 3px;
         }
 
         .schemes { display: flex; flex-direction: column; gap: 1px; }
+        .schemes.sort-color .scheme { order: var(--color-order); }
+        .schemes.grid-view {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+        }
+        @media (max-width: 900px) {
+            .schemes.grid-view { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .schemes.grid-view { grid-template-columns: repeat(3, 1fr); }
+        }
         .scheme {
             display: grid;
             grid-template-columns: 280px 1fr;
@@ -71,6 +120,38 @@
         .scheme-name { font-weight: 400; font-size: 18px; }
         .scheme-palette { height: 24px; }
         .scheme-palette svg { width: 100%; height: 100%; display: block; }
+        .scheme-palette-grid { display: none; }
+        .grid-view .scheme-palette-bar { display: none; }
+        .grid-view .scheme-palette-grid { display: block; }
+
+        .grid-view .scheme {
+            display: block;
+            padding: 0;
+            margin: 0;
+            position: relative;
+            aspect-ratio: 1;
+        }
+        .grid-view .scheme:hover { background: transparent; }
+        .grid-view .scheme-name {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            font-size: 12px;
+            padding: 8px 10px;
+            opacity: 0;
+            transition: opacity 0.15s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .grid-view .scheme:hover .scheme-name { opacity: 1; }
+        .grid-view .scheme-palette {
+            width: 100%;
+            height: 100%;
+        }
 
         .templates {
             display: flex;
@@ -104,12 +185,22 @@
         </header>
 
         <section>
-            <h2>Schemes ({{scheme-count}})</h2>
-            <div class="schemes">
+            <div class="section-header">
+                <div class="view-toggle{{#view-grid}} compact{{/view-grid}}" onclick="toggleView()">
+                    <span class="chevron">▼</span>
+                    <h2>Schemes ({{scheme-count}})</h2>
+                </div>
+                <div class="sort-links">
+                    <a href="/?{{#view-grid}}view=grid{{/view-grid}}" onclick="setSort('name'); return false" {{#sort-by-name}}class="active"{{/sort-by-name}}>name</a>
+                    <a href="/?sort=color{{#view-grid}}&view=grid{{/view-grid}}" onclick="setSort('color'); return false" {{#sort-by-color}}class="active"{{/sort-by-color}}>color</a>
+                </div>
+            </div>
+            <div id="schemes" class="schemes{{#view-grid}} grid-view{{/view-grid}}{{#sort-by-color}} sort-color{{/sort-by-color}}">
 {{#schemes}}
-                <a href="/{{name}}" class="scheme">
+                <a href="/{{name}}" class="scheme" style="--color-order: {{color-order}}">
                     <span class="scheme-name">{{name}}</span>
-                    <span class="scheme-palette">{{{palette-svg}}}</span>
+                    <span class="scheme-palette scheme-palette-bar">{{{palette-svg}}}</span>
+                    <span class="scheme-palette scheme-palette-grid">{{{palette-grid-svg}}}</span>
                 </a>
 {{/schemes}}
             </div>
@@ -128,5 +219,38 @@
             base16 / base24 color schemes
         </footer>
     </div>
+    <script>
+        function updateUrl() {
+            const params = new URLSearchParams();
+            if (document.getElementById('schemes').classList.contains('grid-view')) {
+                params.set('view', 'grid');
+            }
+            if (document.getElementById('schemes').classList.contains('sort-color')) {
+                params.set('sort', 'color');
+            }
+            const url = params.toString() ? '?' + params.toString() : '/';
+            history.pushState({}, '', url);
+        }
+        function toggleView() {
+            document.querySelector('.view-toggle').classList.toggle('compact');
+            document.getElementById('schemes').classList.toggle('grid-view');
+            updateUrl();
+        }
+        function setSort(mode) {
+            const schemes = document.getElementById('schemes');
+            const links = document.querySelectorAll('.sort-links a');
+            if (mode === 'color') {
+                schemes.classList.add('sort-color');
+                links[0].classList.remove('active');
+                links[1].classList.add('active');
+            } else {
+                schemes.classList.remove('sort-color');
+                links[0].classList.add('active');
+                links[1].classList.remove('active');
+            }
+            updateUrl();
+        }
+        window.addEventListener('popstate', () => location.reload());
+    </script>
 </body>
 </html>

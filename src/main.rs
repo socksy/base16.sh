@@ -174,7 +174,7 @@ impl TemplateIndex {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct SchemeYaml {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     system: String,
@@ -190,6 +190,15 @@ struct FormatQuery {
     #[serde(default)]
     format: Option<String>,
 }
+
+#[derive(Deserialize)]
+struct IndexQuery {
+    #[serde(default)]
+    sort: Option<String>,
+    #[serde(default)]
+    view: Option<String>,
+}
+
 
 #[derive(Serialize)]
 struct HelpResponse {
@@ -272,6 +281,20 @@ fn build_palette_svg(scheme_data: &SchemeYaml, width: u32, height: u32, rect_wid
             .cloned()
             .unwrap_or_else(|| "#000000".to_string());
         svg.push_str(&format!(r#"<rect x="{}" y="0" width="{}" height="{}" fill="{}"/>"#, i * rect_width, rect_width, height, color));
+    }
+    svg.push_str("</svg>");
+    svg
+}
+
+fn build_palette_grid_svg(scheme_data: &SchemeYaml) -> String {
+    let mut svg = String::from(r#"<svg viewBox="0 0 4 4" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">"#);
+    for i in 0..16 {
+        let color = scheme_data.palette.get(&format!("base{:02X}", i))
+            .cloned()
+            .unwrap_or_else(|| "#000000".to_string());
+        let x = i % 4;
+        let y = i / 4;
+        svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
     }
     svg.push_str("</svg>");
     svg
@@ -395,26 +418,83 @@ async fn handle_scheme(
     }
 }
 
-async fn handle_index() -> Response {
-    let mut schemes: Vec<(&String, &SchemeInfo)> = SCHEME_INDEX.schemes.iter().collect();
-    schemes.sort_by_key(|(name, _)| *name);
+async fn handle_index(Query(query): Query<IndexQuery>) -> Response {
+    let sort_by_color = query.sort.as_deref() == Some("color");
+    let view_grid = query.view.as_deref() == Some("grid");
+
+    let mut schemes_with_data: Vec<(String, SchemeYaml, String)> = SCHEME_INDEX
+        .schemes
+        .iter()
+        .filter_map(|(name, info)| {
+            let yaml_str = std::fs::read_to_string(&info.path).ok()?;
+            let scheme_data: SchemeYaml = serde_yaml::from_str(&yaml_str).ok()?;
+            Some((name.clone(), scheme_data, info.path.clone()))
+        })
+        .collect();
+
+    // Always sort alphabetically - color order is handled via CSS
+    schemes_with_data.sort_by(|(name_a, _, _), (name_b, _, _)| name_a.cmp(name_b));
 
     let mut template_names: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
     template_names.sort();
 
     let data = MapBuilder::new()
-        .insert_str("scheme-count", schemes.len().to_string())
+        .insert_str("scheme-count", schemes_with_data.len().to_string())
         .insert_str("template-count", template_names.len().to_string())
+        .insert_bool("sort-by-name", !sort_by_color)
+        .insert_bool("sort-by-color", sort_by_color)
+        .insert_bool("view-grid", view_grid)
         .insert_vec("schemes", |mut vec| {
-            for (name, info) in &schemes {
-                if let Ok(yaml_str) = std::fs::read_to_string(&info.path)
-                    && let Ok(scheme_data) = serde_yaml::from_str::<SchemeYaml>(&yaml_str) {
-                        let palette_svg = build_palette_svg(&scheme_data, 224, 20, 14);
-                        vec = vec.push_map(|map| {
-                            map.insert_str("name", name.as_str())
-                               .insert_str("palette-svg", &palette_svg)
-                        });
-                    }
+            // Build color-sorted order index
+            let color_keys = [
+                "base00", "base01", "base02", "base03", "base04", "base05", "base06", "base07",
+                "base08", "base09", "base0A", "base0B", "base0C", "base0D", "base0E", "base0F",
+            ];
+            let scheme_to_vector = |palette: &HashMap<String, String>| -> Vec<f64> {
+                color_keys.iter().flat_map(|key| {
+                    let hex = palette.get(*key).map(|s| s.as_str()).unwrap_or("#000000").trim_start_matches('#');
+                    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0) as f64;
+                    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f64;
+                    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0) as f64;
+                    [r, g, b]
+                }).collect()
+            };
+            let color_distance = |a: &[f64], b: &[f64]| -> f64 {
+                a.iter().zip(b.iter()).map(|(x, y)| (x - y).powi(2)).sum::<f64>().sqrt()
+            };
+            let vectors: Vec<Vec<f64>> = schemes_with_data.iter().map(|(_, s, _)| scheme_to_vector(&s.palette)).collect();
+            let n = schemes_with_data.len();
+            let mut visited = vec![false; n];
+            let mut order = Vec::with_capacity(n);
+            let start = vectors.iter().enumerate().min_by(|(_, a), (_, b)| {
+                (a[0] + a[1] + a[2]).partial_cmp(&(b[0] + b[1] + b[2])).unwrap()
+            }).map(|(i, _)| i).unwrap_or(0);
+            order.push(start);
+            visited[start] = true;
+            for _ in 1..n {
+                let last = *order.last().unwrap();
+                if let Some(next) = (0..n).filter(|&i| !visited[i]).min_by(|&a, &b| {
+                    color_distance(&vectors[last], &vectors[a]).partial_cmp(&color_distance(&vectors[last], &vectors[b])).unwrap()
+                }) {
+                    order.push(next);
+                    visited[next] = true;
+                }
+            }
+            let mut color_order_map: HashMap<usize, usize> = HashMap::new();
+            for (pos, &orig_idx) in order.iter().enumerate() {
+                color_order_map.insert(orig_idx, pos);
+            }
+
+            for (i, (name, scheme_data, _)) in schemes_with_data.iter().enumerate() {
+                let palette_svg = build_palette_svg(scheme_data, 224, 20, 14);
+                let palette_grid_svg = build_palette_grid_svg(scheme_data);
+                let color_pos = color_order_map.get(&i).copied().unwrap_or(i);
+                vec = vec.push_map(|map| {
+                    map.insert_str("name", name.as_str())
+                       .insert_str("palette-svg", &palette_svg)
+                       .insert_str("palette-grid-svg", &palette_grid_svg)
+                       .insert_str("color-order", color_pos.to_string())
+                });
             }
             vec
         })
