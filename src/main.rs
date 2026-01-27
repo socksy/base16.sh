@@ -197,6 +197,8 @@ struct IndexQuery {
     sort: Option<String>,
     #[serde(default)]
     view: Option<String>,
+    #[serde(default)]
+    format: Option<String>,
 }
 
 
@@ -418,7 +420,47 @@ async fn handle_scheme(
     }
 }
 
-async fn handle_index(Query(query): Query<IndexQuery>) -> Response {
+async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Response {
+    let accept = headers.get("accept")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    let format = match query.format.as_deref() {
+        Some("yaml") => "yaml",
+        Some("json") => "json",
+        Some("html") => "html",
+        None if accept.contains("application/yaml") => "yaml",
+        None if accept.contains("text/html") => "html",
+        _ => "json",
+    };
+
+    if format != "html" {
+        let mut schemes: Vec<String> = SCHEME_INDEX.schemes.keys().cloned().collect();
+        schemes.sort();
+
+        let mut templates: Vec<String> = TEMPLATE_INDEX.templates.keys().cloned().collect();
+        templates.sort();
+
+        let response = HelpResponse { schemes, templates };
+
+        return match format {
+            "yaml" => {
+                let yaml = serde_yaml::to_string(&response).unwrap();
+                Response::builder()
+                    .header("content-type", "application/yaml")
+                    .body(Body::from(yaml))
+                    .unwrap()
+            }
+            _ => {
+                let json = serde_json::to_string_pretty(&response).unwrap();
+                Response::builder()
+                    .header("content-type", "application/json")
+                    .body(Body::from(json))
+                    .unwrap()
+            }
+        };
+    }
+
     let sort_by_color = query.sort.as_deref() == Some("color");
     let view_grid = query.view.as_deref() == Some("grid");
 
@@ -967,5 +1009,95 @@ mod tests {
             response.headers().get("x-content-type-options").unwrap(),
             "nosniff"
         );
+    }
+
+    #[tokio::test]
+    async fn test_index_json_default() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["schemes"].is_array());
+        assert!(json["templates"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_index_html_with_accept() {
+        let app = create_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/")
+                    .header("accept", "text/html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response
+            .headers()
+            .get("content-type")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("text/html"));
+    }
+
+    #[tokio::test]
+    async fn test_index_json_with_format_param() {
+        let app = create_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/?format=json")
+                    .header("accept", "text/html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_index_yaml_with_format_param() {
+        let app = create_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/?format=yaml")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("content-type").unwrap(),
+            "application/yaml"
+        );
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let content = String::from_utf8(body.to_vec()).unwrap();
+        assert!(content.contains("schemes:"));
+        assert!(content.contains("templates:"));
     }
 }
