@@ -223,6 +223,56 @@ impl TemplateInfo {
     }
 }
 
+/// Parse a tinted-* template name to extract the key and variant ("base16", "base24", or "both").
+fn parse_tinted_template_name(name: &str, tinted_short: &str) -> Option<(String, &'static str)> {
+    // Exact matches
+    match name {
+        "base16" => return Some((tinted_short.to_string(), "base16")),
+        "base24" => return Some((tinted_short.to_string(), "base24")),
+        _ => {}
+    }
+
+    // tinted-vim style: "tinted-{short}" supports both
+    match name == format!("tinted-{}", tinted_short) {
+        true => return Some((tinted_short.to_string(), "both")),
+        _ => {}
+    }
+
+    // Suffix patterns (ordered longest first)
+    let suffixes: &[(&str, &str)] = &[
+        ("-base16-16", "base16"), ("-base24-16", "base24"),
+        ("-base16", "base16"), ("-base24", "base24"),
+    ];
+    for &(suffix, variant) in suffixes {
+        match name.strip_suffix(suffix) {
+            Some(base) => return Some((base.to_string(), variant)),
+            None => continue,
+        }
+    }
+
+    // Prefix patterns: "base16-name" / "base24-name"
+    let prefixes: &[(&str, &str)] = &[("base16-", "base16"), ("base24-", "base24")];
+    for &(prefix, variant) in prefixes {
+        match name.strip_prefix(prefix) {
+            Some("default") => return Some((tinted_short.to_string(), variant)),
+            Some(rest) => return Some((format!("{}-{}", tinted_short, rest), variant)),
+            None => continue,
+        }
+    }
+
+    // Extension patterns: "base16.ext" / "base24.ext" (skip .vim for nvim)
+    let ext_prefixes: &[(&str, &str)] = &[("base16.", "base16"), ("base24.", "base24")];
+    for &(prefix, variant) in ext_prefixes {
+        match (name.strip_prefix(prefix), tinted_short) {
+            (Some("vim"), "nvim") => return None,
+            (Some(_), _) => return Some((tinted_short.to_string(), variant)),
+            (None, _) => continue,
+        }
+    }
+
+    None
+}
+
 struct TemplateIndex {
     templates: HashMap<String, TemplateInfo>,
 }
@@ -259,114 +309,49 @@ impl TemplateIndex {
                         for (template_name, _) in config.iter() {
                             let mustache_file = format!("{}.mustache", template_name);
                             let template_path = repo_path.join(format!("templates/{}", mustache_file));
-
-                            // Also check for head+body split format
                             let body_path = repo_path.join("templates/body.mustache");
-                            let actual_path = if template_path.exists() {
-                                template_path
-                            } else if body_path.exists() {
-                                body_path
-                            } else {
-                                continue;
+
+                            let actual_path = match (template_path.exists(), body_path.exists()) {
+                                (true, _) => template_path,
+                                (false, true) => body_path,
+                                _ => continue,
+                            };
+                            let path_str = actual_path.to_string_lossy().to_string();
+
+                            let (key, variant) = match is_tinted {
+                                true => match parse_tinted_template_name(template_name, tinted_short) {
+                                    Some((base_name, v)) => (sanitize_name(&base_name), v),
+                                    None => continue,
+                                },
+                                false => {
+                                    let key = match (template_count, template_name.as_str(), short_repo.as_str()) {
+                                        (1, _, _) | (_, "default", _) => short_repo.clone(),
+                                        (_, name, "css-etc" | "styles") => name.to_string(),
+                                        (_, name, _) => format!("{}-{}", short_repo, name),
+                                    };
+                                    let variant = match repo_name.starts_with("base24-") {
+                                        true => "base24",
+                                        false => "base16",
+                                    };
+                                    (key, variant)
+                                }
                             };
 
-                            {
-                                let path_str = actual_path.to_string_lossy().to_string();
+                            let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
+                                name: key,
+                                base16_path: None,
+                                base24_path: None,
+                                _repo: repo_name.to_string(),
+                            });
 
-                                if is_tinted {
-                                    // Parse template name to extract key and variant
-                                    // Patterns: "name-base16", "base16-name", "base16", "base16.ext"
-                                    let parsed = if let Some(base) = template_name.strip_suffix("-base16") {
-                                        Some((base.to_string(), "base16"))
-                                    } else if let Some(base) = template_name.strip_suffix("-base24") {
-                                        Some((base.to_string(), "base24"))
-                                    } else if let Some(base) = template_name.strip_suffix("-base16-16") {
-                                        Some((base.to_string(), "base16"))
-                                    } else if let Some(base) = template_name.strip_suffix("-base24-16") {
-                                        Some((base.to_string(), "base24"))
-                                    } else if let Some(rest) = template_name.strip_prefix("base16-") {
-                                        let key = if rest == "default" {
-                                            tinted_short.to_string()
-                                        } else {
-                                            format!("{}-{}", tinted_short, rest)
-                                        };
-                                        Some((key, "base16"))
-                                    } else if let Some(rest) = template_name.strip_prefix("base24-") {
-                                        let key = if rest == "default" {
-                                            tinted_short.to_string()
-                                        } else {
-                                            format!("{}-{}", tinted_short, rest)
-                                        };
-                                        Some((key, "base24"))
-                                    } else if let Some(ext) = template_name.strip_prefix("base16.") {
-                                        // tinted-nvim: base16.lua → nvim (skip .vim)
-                                        if tinted_short == "nvim" && ext == "vim" {
-                                            None
-                                        } else {
-                                            Some((tinted_short.to_string(), "base16"))
-                                        }
-                                    } else if let Some(ext) = template_name.strip_prefix("base24.") {
-                                        if tinted_short == "nvim" && ext == "vim" {
-                                            None
-                                        } else {
-                                            Some((tinted_short.to_string(), "base24"))
-                                        }
-                                    } else if template_name == "base16" {
-                                        Some((tinted_short.to_string(), "base16"))
-                                    } else if template_name == "base24" {
-                                        Some((tinted_short.to_string(), "base24"))
-                                    } else if template_name == &format!("tinted-{}", tinted_short) {
-                                        // tinted-vim: template named "tinted-vim" supports both
-                                        Some((tinted_short.to_string(), "both"))
-                                    } else {
-                                        None
-                                    };
-
-                                    if let Some((base_name, variant)) = parsed {
-                                        let key = sanitize_name(&base_name);
-                                        let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
-                                            name: key.clone(),
-                                            base16_path: None,
-                                            base24_path: None,
-                                            _repo: repo_name.to_string(),
-                                        });
-
-                                        match variant {
-                                            "base16" => entry.base16_path = Some(path_str),
-                                            "base24" => entry.base24_path = Some(path_str),
-                                            "both" => {
-                                                entry.base16_path = Some(path_str.clone());
-                                                entry.base24_path = Some(path_str);
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                } else {
-                                    // For css-etc/styles, use template name directly (css, scss, less, etc.)
-                                    let key = if template_count == 1 || template_name == "default" {
-                                        short_repo.clone()
-                                    } else if short_repo == "css-etc" || short_repo == "styles" {
-                                        template_name.to_string()
-                                    } else {
-                                        format!("{}-{}", short_repo, template_name)
-                                    };
-
-                                    // Determine if this is a base16 or base24 template based on repo name
-                                    let is_base24_repo = repo_name.starts_with("base24-");
-
-                                    let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
-                                        name: key,
-                                        base16_path: None,
-                                        base24_path: None,
-                                        _repo: repo_name.to_string(),
-                                    });
-
-                                    if is_base24_repo {
-                                        entry.base24_path = Some(path_str);
-                                    } else {
-                                        entry.base16_path = Some(path_str);
-                                    }
+                            match variant {
+                                "base16" => entry.base16_path = Some(path_str),
+                                "base24" => entry.base24_path = Some(path_str),
+                                "both" => {
+                                    entry.base16_path = Some(path_str.clone());
+                                    entry.base24_path = Some(path_str);
                                 }
+                                _ => {}
                             }
                         }
                     }
@@ -1444,5 +1429,50 @@ mod tests {
         let content = String::from_utf8(body.to_vec()).unwrap();
         assert!(content.contains("schemes:"));
         assert!(content.contains("templates:"));
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_exact() {
+        assert_eq!(parse_tinted_template_name("base16", "vim"), Some(("vim".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("base24", "vim"), Some(("vim".to_string(), "base24")));
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_tinted_style() {
+        assert_eq!(parse_tinted_template_name("tinted-vim", "vim"), Some(("vim".to_string(), "both")));
+        assert_eq!(parse_tinted_template_name("tinted-shell", "shell"), Some(("shell".to_string(), "both")));
+        assert_eq!(parse_tinted_template_name("tinted-vim", "shell"), None);
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_suffix() {
+        assert_eq!(parse_tinted_template_name("dark-base16", "vim"), Some(("dark".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("dark-base24", "vim"), Some(("dark".to_string(), "base24")));
+        assert_eq!(parse_tinted_template_name("dark-base16-16", "vim"), Some(("dark".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("dark-base24-16", "vim"), Some(("dark".to_string(), "base24")));
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_prefix() {
+        assert_eq!(parse_tinted_template_name("base16-default", "vim"), Some(("vim".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("base24-default", "vim"), Some(("vim".to_string(), "base24")));
+        assert_eq!(parse_tinted_template_name("base16-dark", "vim"), Some(("vim-dark".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("base24-light", "shell"), Some(("shell-light".to_string(), "base24")));
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_extension() {
+        assert_eq!(parse_tinted_template_name("base16.lua", "nvim"), Some(("nvim".to_string(), "base16")));
+        assert_eq!(parse_tinted_template_name("base24.lua", "nvim"), Some(("nvim".to_string(), "base24")));
+        assert_eq!(parse_tinted_template_name("base16.vim", "nvim"), None);
+        assert_eq!(parse_tinted_template_name("base24.vim", "nvim"), None);
+        assert_eq!(parse_tinted_template_name("base16.vim", "other"), Some(("other".to_string(), "base16")));
+    }
+
+    #[test]
+    fn test_parse_tinted_template_name_no_match() {
+        assert_eq!(parse_tinted_template_name("random-name", "vim"), None);
+        assert_eq!(parse_tinted_template_name("", "vim"), None);
+        assert_eq!(parse_tinted_template_name("base15", "vim"), None);
     }
 }
