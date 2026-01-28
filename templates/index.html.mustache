@@ -4,6 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>base16.sh</title>
+    <script>
+        (function() {
+            var host = location.hostname;
+            var title = host === 'base24.sh' ? 'base24.sh' : 'base16.sh';
+            document.title = title;
+            document.addEventListener('DOMContentLoaded', function() {
+                document.getElementById('site-title').textContent = title;
+            });
+        })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -181,6 +191,11 @@
             border-top: 1px solid var(--fg);
             font-size: 12px;
             color: var(--muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         footer a {
             color: var(--muted);
@@ -219,7 +234,7 @@
     </div>
     <div class="container">
         <header>
-            <h1>base16.sh</h1>
+            <h1 id="site-title">base16.sh</h1>
             <p>color schemes for terminals + editors / <a href="/--help">api</a> / <a href="/--random">random</a></p>
         </header>
 
@@ -260,9 +275,8 @@
         </section>
 
         <footer>
-            base16 / base24 color schemes | <a href="https://github.com/socksy/base16.sh">github</a> | by <a href="https://github.com/socksy">@socksy</a> (<a href="https://ben.lovell.io">ben.lovell.io</a>)
-            <br>
-            schemes + templates by <a href="https://github.com/tinted-theming">tinted-theming</a> | try <a href="https://github.com/tinted-theming/tinty">tinty</a> to manage your themes
+            <span>base16 / base24 color schemes | <a href="https://github.com/socksy/base16.sh">github</a> | by <a href="https://github.com/socksy">@socksy</a> (<a href="https://ben.lovell.io">ben.lovell.io</a>)</span>
+            <span>schemes + templates by <a href="https://github.com/tinted-theming">tinted-theming</a> | try <a href="https://github.com/tinted-theming/tinty">tinty</a> to manage your themes</span>
         </footer>
     </div>
     <script>
