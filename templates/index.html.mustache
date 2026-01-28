@@ -333,13 +333,12 @@
             if (anchorScheme) {
                 const newRect = anchorScheme.getBoundingClientRect();
                 window.scrollBy(0, newRect.top - anchorOffset);
-            }
 
-            // Update kbdIndex if there was a selection
-            const selected = document.querySelector('.scheme.kbd-selected');
-            if (selected) {
+                // Update kbd selection to anchor scheme for consistent j/k navigation
+                document.querySelectorAll('.scheme.kbd-selected').forEach(s => s.classList.remove('kbd-selected'));
+                anchorScheme.classList.add('kbd-selected');
                 const visible = getVisibleSchemes();
-                kbdIndex = visible.indexOf(selected);
+                kbdIndex = visible.indexOf(anchorScheme);
             }
             updateUrl();
         }
