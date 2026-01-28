@@ -994,13 +994,20 @@ async fn handle_scheme_template(
         .unwrap()
 }
 
-async fn handle_random(Query(query): Query<FormatQuery>) -> Redirect {
+async fn handle_random(Query(query): Query<FormatQuery>) -> Response {
     let scheme = SCHEME_INDEX.names_sorted
         .choose(&mut rand::thread_rng())
         .map(|s| s.as_str())
         .unwrap_or("monokai");
     let order_param = if query.order.as_deref() == Some("color") { "?order=color" } else { "" };
-    Redirect::to(&format!("/{}{}", scheme, order_param))
+    let location = format!("/{}{}", scheme, order_param);
+
+    Response::builder()
+        .status(StatusCode::TEMPORARY_REDIRECT)
+        .header(header::LOCATION, location)
+        .header(header::CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+        .body(Body::empty())
+        .unwrap()
 }
 
 fn create_app() -> Router {
