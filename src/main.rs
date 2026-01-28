@@ -10,7 +10,6 @@ use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::limit::RequestBodyLimitLayer;
 use mustache::MapBuilder;
 use once_cell::sync::Lazy;
-use rand::seq::SliceRandom;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -640,7 +639,7 @@ async fn handle_scheme(
         let order_param = if by_color { "?order=color" } else { "" };
         let (prev, next) = SCHEME_INDEX.get_neighbors(&scheme_info.name, by_color);
 
-        let random_href = if by_color { "/--random?order=color" } else { "/--random" };
+        let schemes_json = serde_json::to_string(&SCHEME_INDEX.names_sorted).unwrap();
 
         let mut data = MapBuilder::new()
             .insert_str("scheme-name", &scheme_data.name)
@@ -648,7 +647,7 @@ async fn handle_scheme(
             .insert_str("scheme-system", &scheme_info.system)
             .insert_str("palette-svg", &palette_svg)
             .insert_str("yaml-colorized", colorize_yaml_hex_values(&scheme_yaml_str, &fg))
-            .insert_str("random-href", random_href);
+            .insert_str("schemes-json", &schemes_json);
 
         if let Some(prev_name) = prev {
             data = data.insert_str("prev-scheme", prev_name)
@@ -995,6 +994,7 @@ async fn handle_scheme_template(
 }
 
 async fn handle_random(Query(query): Query<FormatQuery>) -> Response {
+    use rand::seq::SliceRandom;
     let scheme = SCHEME_INDEX.names_sorted
         .choose(&mut rand::thread_rng())
         .map(|s| s.as_str())

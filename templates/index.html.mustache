@@ -235,7 +235,7 @@
     <div class="container">
         <header>
             <h1 id="site-title">base16.sh</h1>
-            <p>color schemes for terminals + editors / <a href="/--help">api</a> / <a href="/--random">random</a></p>
+            <p>color schemes for terminals + editors / <a href="/--help">api</a> / <a href="#" onclick="goRandom(); return false">random</a></p>
         </header>
 
         <section>
@@ -503,11 +503,27 @@
                 case ' ': toggleView(); e.preventDefault(); break;
                 case '/': openSearch(); e.preventDefault(); break;
                 case 'Escape': closeSearch(); e.preventDefault(); break;
+                case 'r':
+                    goRandom();
+                    e.preventDefault();
+                    break;
                 case '?':
-                    alert('Keyboard shortcuts:\n\nhjkl    navigate (arrows in grid)\ng       first scheme\nG       last scheme\nl/Enter open scheme (list view)\nEnter   open scheme (grid view)\no       toggle sort (name/color)\nSpace   toggle view (list/grid)\n/       search\nEsc     close search\n?       show this help');
+                    alert('Keyboard shortcuts:\n\nhjkl    navigate (arrows in grid)\ng       first scheme\nG       last scheme\nl/Enter open scheme (list view)\nEnter   open scheme (grid view)\no       toggle sort (name/color)\nSpace   toggle view (list/grid)\n/       search\nr       random scheme\nEsc     close search\n?       show this help');
                     e.preventDefault();
                     break;
             }
+        });
+        function goRandom() {
+            const visible = getVisibleSchemes();
+            if (visible.length === 0) return;
+            const scheme = visible[Math.floor(Math.random() * visible.length)];
+            const schemes = document.getElementById('schemes');
+            const url = schemes.classList.contains('sort-color') ? scheme.href + '?order=color' : scheme.href;
+            location.href = url;
+        }
+        document.getElementById('random-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            goRandom();
         });
     </script>
 </body>

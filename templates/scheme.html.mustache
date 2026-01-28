@@ -136,7 +136,7 @@
                 {{#has-prev}}<a href="{{prev-href}}" title="{{prev-scheme}}">&larr; prev</a>{{/has-prev}}{{^has-prev}}<span class="disabled">&larr; prev</span>{{/has-prev}}
                 {{#has-next}}<a href="{{next-href}}" title="{{next-scheme}}">next &rarr;</a>{{/has-next}}{{^has-next}}<span class="disabled">next &rarr;</span>{{/has-next}}
             </span>
-            <a href="{{random-href}}" title="base03">random</a>
+            <a href="/--random" id="random-link" title="base03">random</a>
         </div>
         <script>
             const ref = document.referrer;
@@ -218,7 +218,6 @@
             const prev = navLinks[0];
             const next = navLinks[1];
             const back = document.getElementById('back-link');
-            const random = document.querySelector('.nav a[href*="random"]');
             if (pendingG) {
                 pendingG = false;
                 if (e.key === 'i') { location.href = '/'; e.preventDefault(); }
@@ -238,7 +237,8 @@
                     if (back) { location.href = back.href; e.preventDefault(); }
                     break;
                 case 'r':
-                    if (random) { location.href = random.href; e.preventDefault(); }
+                    goRandom();
+                    e.preventDefault();
                     break;
                 case 'g':
                     pendingG = true;
@@ -250,6 +250,17 @@
                     e.preventDefault();
                     break;
             }
+        });
+
+        const schemes = {{{schemes-json}}};
+        function goRandom() {
+            const scheme = schemes[Math.floor(Math.random() * schemes.length)];
+            const order = new URLSearchParams(location.search).get('order') === 'color' ? '?order=color' : '';
+            location.href = '/' + scheme + order;
+        }
+        document.getElementById('random-link').addEventListener('click', function(e) {
+            e.preventDefault();
+            goRandom();
         });
     </script>
 </body>
