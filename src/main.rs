@@ -620,6 +620,7 @@ async fn handle_scheme(
 
         Response::builder()
             .header("content-type", "application/json")
+            .header("vary", "Accept")
             .header("x-scheme-name", &scheme_info.name)
             .header("x-scheme-system", &scheme_info.system)
             .body(Body::from(json))
@@ -672,6 +673,7 @@ async fn handle_scheme(
 
         Response::builder()
             .header("content-type", "text/html; charset=utf-8")
+            .header("vary", "Accept")
             .header("x-scheme-name", &scheme_info.name)
             .header("x-scheme-system", &scheme_info.system)
             .body(Body::from(html))
@@ -683,6 +685,7 @@ async fn handle_scheme(
                 let body = Body::from_stream(stream);
                 Response::builder()
                     .header("content-type", "application/yaml")
+                    .header("vary", "Accept")
                     .header("x-scheme-name", &scheme_info.name)
                     .header("x-scheme-system", &scheme_info.system)
                     .body(body)
@@ -718,6 +721,7 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
                 let yaml = serde_yaml::to_string(&response).unwrap();
                 Response::builder()
                     .header("content-type", "application/yaml")
+                    .header("vary", "Accept")
                     .body(Body::from(yaml))
                     .unwrap()
             }
@@ -725,6 +729,7 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
                 let json = serde_json::to_string_pretty(&response).unwrap();
                 Response::builder()
                     .header("content-type", "application/json")
+                    .header("vary", "Accept")
                     .body(Body::from(json))
                     .unwrap()
             }
@@ -807,6 +812,7 @@ async fn handle_index(Query(query): Query<IndexQuery>, headers: HeaderMap) -> Re
 
     Response::builder()
         .header("content-type", "text/html; charset=utf-8")
+        .header("vary", "Accept")
         .body(Body::from(html))
         .unwrap()
 }
@@ -830,6 +836,7 @@ async fn handle_help(
         let json = serde_json::to_string_pretty(&help).unwrap();
         Response::builder()
             .header("content-type", "application/json")
+            .header("vary", "Accept")
             .body(Body::from(json))
             .unwrap()
     } else {
@@ -859,6 +866,7 @@ async fn handle_help(
 
         Response::builder()
             .header("content-type", "text/plain; charset=utf-8")
+            .header("vary", "Accept")
             .body(Body::from(text))
             .unwrap()
     }
@@ -1411,6 +1419,46 @@ mod tests {
             response.headers().get("content-type").unwrap(),
             "application/json"
         );
+    }
+
+    #[tokio::test]
+    async fn test_vary_header_for_content_negotiation() {
+        let app = create_app();
+
+        // JSON response should have Vary: Accept
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/monokai?format=json")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.headers().get("vary").unwrap(), "Accept");
+
+        // YAML response should have Vary: Accept
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/monokai").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.headers().get("vary").unwrap(), "Accept");
+
+        // HTML response should have Vary: Accept
+        let app = create_app();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/monokai")
+                    .header("accept", "text/html")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.headers().get("vary").unwrap(), "Accept");
     }
 
     #[tokio::test]
