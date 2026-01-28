@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "base16-btop": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1728767074,
+        "narHash": "sha256-XsNH7ufJ/H51z6FRAEXOZenz0KqzV2tZomWpNRTR2Kw=",
+        "owner": "~blueingreen",
+        "repo": "base16-btop",
+        "rev": "69fd5f822cb3b144f6e4563c55422df81ef44733",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~blueingreen",
+        "repo": "base16-btop",
+        "type": "sourcehut"
+      }
+    },
     "base16-dunst": {
       "flake": false,
       "locked": {
@@ -29,6 +45,22 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "base16-emacs",
+        "type": "github"
+      }
+    },
+    "base16-gnome-terminal": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1703982248,
+        "narHash": "sha256-dxLVk6/Tu9OsAnI4OP37YpOaY+FIdbDqPyi59ISiHIg=",
+        "owner": "aarowill",
+        "repo": "base16-gnome-terminal",
+        "rev": "d58d9914cfae3d43c80b885d146bfe5a54f85ec4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aarowill",
+        "repo": "base16-gnome-terminal",
         "type": "github"
       }
     },
@@ -80,6 +112,22 @@
         "type": "github"
       }
     },
+    "base16-highlight": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1690068921,
+        "narHash": "sha256-NIdMc/kSgI5uFy9/tyUB7Q2asdu+Jk/Cw+mBvPrnQRo=",
+        "owner": "bezhermoso",
+        "repo": "base16-highlight",
+        "rev": "115f016dcb807d8626aff8ce0e8ee8f17185e676",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bezhermoso",
+        "repo": "base16-highlight",
+        "type": "github"
+      }
+    },
     "base16-i3": {
       "flake": false,
       "locked": {
@@ -93,6 +141,22 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "base16-i3",
+        "type": "github"
+      }
+    },
+    "base16-i3status-rust": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1525720696,
+        "narHash": "sha256-+126xq7iUVLiKnzHuGlKJIMYI4h0BaYEQOsLZta8aSk=",
+        "owner": "mystfox",
+        "repo": "base16-i3status-rust",
+        "rev": "b761342deb520a59b487749c35e5f0fc14db0ee0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mystfox",
+        "repo": "base16-i3status-rust",
         "type": "github"
       }
     },
@@ -144,6 +208,54 @@
         "type": "github"
       }
     },
+    "base16-lazygit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1728767033,
+        "narHash": "sha256-jzonnZRmBG/gwT/zf545w2DoA+4JTmBg1Hr8FOMC20o=",
+        "owner": "~blueingreen",
+        "repo": "base16-lazygit",
+        "rev": "e47b9b282d9650d43b8811161260a8a4b96dfc35",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~blueingreen",
+        "repo": "base16-lazygit",
+        "type": "sourcehut"
+      }
+    },
+    "base16-mako": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1584466459,
+        "narHash": "sha256-83csG/gORJlPg9sOlOeWgAH9KYgt+cgrJJNXMuIaVBQ=",
+        "owner": "Eluminae",
+        "repo": "base16-mako",
+        "rev": "f46c99682c03d30f52436741f1902db36738bf06",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Eluminae",
+        "repo": "base16-mako",
+        "type": "github"
+      }
+    },
+    "base16-micro": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1754545900,
+        "narHash": "sha256-MYNn/TVSI4uZLI2mFwOeOk9MdkS6NEy0LeFDHYbRwT0=",
+        "owner": "w3dg",
+        "repo": "base16-micro",
+        "rev": "79d453f80ed8cd8504dd2be781818c4b856babdf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "w3dg",
+        "repo": "base16-micro",
+        "type": "github"
+      }
+    },
     "base16-polybar": {
       "flake": false,
       "locked": {
@@ -157,6 +269,22 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "base16-polybar",
+        "type": "github"
+      }
+    },
+    "base16-pygments": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1676644959,
+        "narHash": "sha256-/NRpvWjbni6EuotJkH1fAav/ngyDZmuJnAk70hV3dFM=",
+        "owner": "mohd-akram",
+        "repo": "base16-pygments",
+        "rev": "ce9f591ff258c06f8f02e4e0439de43ea4fd6c5d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mohd-akram",
+        "repo": "base16-pygments",
         "type": "github"
       }
     },
@@ -224,6 +352,22 @@
         "type": "github"
       }
     },
+    "base16-styles": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1493578694,
+        "narHash": "sha256-cGezU4UofSHvx3ZeRU9JuV63jksxy0L9KzUO+uWfUt8=",
+        "owner": "samme",
+        "repo": "base16-styles",
+        "rev": "8db4f00ca9e5575ba52d98a204ee44a53e13d546",
+        "type": "github"
+      },
+      "original": {
+        "owner": "samme",
+        "repo": "base16-styles",
+        "type": "github"
+      }
+    },
     "base16-sublime-merge": {
       "flake": false,
       "locked": {
@@ -240,20 +384,36 @@
         "type": "github"
       }
     },
-    "base16-vim": {
+    "base16-sway": {
       "flake": false,
       "locked": {
-        "lastModified": 1768527792,
-        "narHash": "sha256-64z0pj1CbrztbK+c8zJbD2lyDX0FIbUVy1dqyz46f78=",
-        "owner": "tinted-theming",
-        "repo": "base16-vim",
-        "rev": "3d4aefaa003ad96535a51ff54d579ecd13fbdb0f",
+        "lastModified": 1708008500,
+        "narHash": "sha256-PAS3bnLKNEEgSJVBHOa4b/fCzyJ3WOInCQ+Qkrw7/zY=",
+        "owner": "rkubosz",
+        "repo": "base16-sway",
+        "rev": "41a9936ad6a3fa23f56d682fc386de9d948ecce6",
         "type": "github"
       },
       "original": {
-        "owner": "tinted-theming",
-        "repo": "base16-vim",
+        "owner": "rkubosz",
+        "repo": "base16-sway",
         "type": "github"
+      }
+    },
+    "base16-swaylock": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1633714906,
+        "narHash": "sha256-8n6ud0eUVZDCXK6LkS26Mhcchistif1/30dsZQJdUeU=",
+        "ref": "refs/heads/main",
+        "rev": "4c73fe042b7612d9a378014b41a5215128217bac",
+        "revCount": 4,
+        "type": "git",
+        "url": "https://git.michaelball.name/gid/base16-swaylock-template"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://git.michaelball.name/gid/base16-swaylock-template"
       }
     },
     "base16-vivid": {
@@ -288,22 +448,6 @@
         "type": "github"
       }
     },
-    "base16-windows-terminal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1743258016,
-        "narHash": "sha256-vLe14oTCvdcydxOfAiUyWwseO1WmhDcKcxh/ynagq5A=",
-        "owner": "tinted-theming",
-        "repo": "base16-windows-terminal",
-        "rev": "95e29cda6dc92caee3788ff8ed461dd59752887b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base16-windows-terminal",
-        "type": "github"
-      }
-    },
     "base16-wob": {
       "flake": false,
       "locked": {
@@ -317,6 +461,38 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "base16-wob",
+        "type": "github"
+      }
+    },
+    "base16-wofi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1595844295,
+        "narHash": "sha256-Dqmwlk3yJbHeYVbz2Eq/bG/kyLf96fZ/hernAx9N9kM=",
+        "owner": "~knezi",
+        "repo": "base16-wofi",
+        "rev": "2182a5ad36d372e625b3d8e1a20ba7447e77ed22",
+        "type": "sourcehut"
+      },
+      "original": {
+        "owner": "~knezi",
+        "repo": "base16-wofi",
+        "type": "sourcehut"
+      }
+    },
+    "base16-zathura": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1643130739,
+        "narHash": "sha256-nVJoygnytYN40VHXpAFwO7ruVbaSydeR547MU45VSuY=",
+        "owner": "HaoZeke",
+        "repo": "base16-zathura",
+        "rev": "9f148b4001dc67d399e645919225943d47e50125",
+        "type": "github"
+      },
+      "original": {
+        "owner": "HaoZeke",
+        "repo": "base16-zathura",
         "type": "github"
       }
     },
@@ -352,22 +528,6 @@
         "type": "github"
       }
     },
-    "base24-gnome-terminal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1705571081,
-        "narHash": "sha256-X/yEvwsOe/4NMDtFE0kd6mOsNIDMGefPGniaB2L97mc=",
-        "owner": "tinted-theming",
-        "repo": "base24-gnome-terminal",
-        "rev": "964c8144309d86b0663147331dc575a1b0f898b8",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-gnome-terminal",
-        "type": "github"
-      }
-    },
     "base24-kate": {
       "flake": false,
       "locked": {
@@ -400,22 +560,6 @@
         "type": "github"
       }
     },
-    "base24-konsole": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1585773126,
-        "narHash": "sha256-HKx+hoxw+WXtQF2sVGw0Fwfpp0q87g6b4zXfSKxvDO4=",
-        "owner": "tinted-theming",
-        "repo": "base24-konsole",
-        "rev": "c25b59f759b842c458f2f3de2d2ecb49ef80843a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-konsole",
-        "type": "github"
-      }
-    },
     "base24-slack": {
       "flake": false,
       "locked": {
@@ -429,70 +573,6 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "base24-slack",
-        "type": "github"
-      }
-    },
-    "base24-termux": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1586358762,
-        "narHash": "sha256-yr4h+PE9LW0QuGL+lqop7yoXDt1G76n9sAYoZhtuVuA=",
-        "owner": "tinted-theming",
-        "repo": "base24-termux",
-        "rev": "f582d5aab48afb05c93c6b1bbc7aa4f7a5931a07",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-termux",
-        "type": "github"
-      }
-    },
-    "base24-vscode-terminal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1587233015,
-        "narHash": "sha256-P8W5Doiu2XWlukabj9Wc/gDy/nr9HaWPevbGp3WWruM=",
-        "owner": "tinted-theming",
-        "repo": "base24-vscode-terminal",
-        "rev": "d81125802940682ad5f9f48e10649b9c46970415",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-vscode-terminal",
-        "type": "github"
-      }
-    },
-    "base24-windows-terminal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1743257966,
-        "narHash": "sha256-yRgCKWk8/L55guRLXgmfef4G9mfMYAVb9D74shTRe3Q=",
-        "owner": "tinted-theming",
-        "repo": "base24-windows-terminal",
-        "rev": "da7bab874a97458c05223ed8fd8a28799dde8aa3",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-windows-terminal",
-        "type": "github"
-      }
-    },
-    "base24-xfce4-terminal": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1587064800,
-        "narHash": "sha256-cAxmYgBnLX9OP44cE834o5ZEnn86CCvs0CnS01SX+38=",
-        "owner": "tinted-theming",
-        "repo": "base24-xfce4-terminal",
-        "rev": "7bcb0a5dd24b720f06d0b5366a1c8b7f3d1e05cb",
-        "type": "github"
-      },
-      "original": {
-        "owner": "tinted-theming",
-        "repo": "base24-xfce4-terminal",
         "type": "github"
       }
     },
@@ -514,39 +594,58 @@
     },
     "root": {
       "inputs": {
+        "base16-btop": "base16-btop",
         "base16-dunst": "base16-dunst",
         "base16-emacs": "base16-emacs",
+        "base16-gnome-terminal": "base16-gnome-terminal",
         "base16-gtk-flatcolor": "base16-gtk-flatcolor",
         "base16-helix": "base16-helix",
         "base16-hexchat": "base16-hexchat",
+        "base16-highlight": "base16-highlight",
         "base16-i3": "base16-i3",
+        "base16-i3status-rust": "base16-i3status-rust",
         "base16-jetbrains": "base16-jetbrains",
         "base16-kakoune": "base16-kakoune",
         "base16-kdeplasma": "base16-kdeplasma",
+        "base16-lazygit": "base16-lazygit",
+        "base16-mako": "base16-mako",
+        "base16-micro": "base16-micro",
         "base16-polybar": "base16-polybar",
+        "base16-pygments": "base16-pygments",
         "base16-qutebrowser": "base16-qutebrowser",
         "base16-rofi": "base16-rofi",
         "base16-scintillua": "base16-scintillua",
         "base16-sioyek": "base16-sioyek",
+        "base16-styles": "base16-styles",
         "base16-sublime-merge": "base16-sublime-merge",
-        "base16-vim": "base16-vim",
+        "base16-sway": "base16-sway",
+        "base16-swaylock": "base16-swaylock",
         "base16-vivid": "base16-vivid",
         "base16-waybar": "base16-waybar",
-        "base16-windows-terminal": "base16-windows-terminal",
         "base16-wob": "base16-wob",
+        "base16-wofi": "base16-wofi",
+        "base16-zathura": "base16-zathura",
         "base16-zed": "base16-zed",
         "base24-css-etc": "base24-css-etc",
-        "base24-gnome-terminal": "base24-gnome-terminal",
         "base24-kate": "base24-kate",
         "base24-kdeplasma": "base24-kdeplasma",
-        "base24-konsole": "base24-konsole",
         "base24-slack": "base24-slack",
-        "base24-termux": "base24-termux",
-        "base24-vscode-terminal": "base24-vscode-terminal",
-        "base24-windows-terminal": "base24-windows-terminal",
-        "base24-xfce4-terminal": "base24-xfce4-terminal",
         "nixpkgs": "nixpkgs",
-        "schemes": "schemes"
+        "schemes": "schemes",
+        "tinted-delta": "tinted-delta",
+        "tinted-fzf": "tinted-fzf",
+        "tinted-jqp": "tinted-jqp",
+        "tinted-matlab": "tinted-matlab",
+        "tinted-nvim": "tinted-nvim",
+        "tinted-shell": "tinted-shell",
+        "tinted-sublime-text": "tinted-sublime-text",
+        "tinted-terminal": "tinted-terminal",
+        "tinted-tmux": "tinted-tmux",
+        "tinted-tridactyl": "tinted-tridactyl",
+        "tinted-vim": "tinted-vim",
+        "tinted-vscode": "tinted-vscode",
+        "tinted-xresources": "tinted-xresources",
+        "tinted-yazi": "tinted-yazi"
       }
     },
     "schemes": {
@@ -562,6 +661,230 @@
       "original": {
         "owner": "tinted-theming",
         "repo": "schemes",
+        "type": "github"
+      }
+    },
+    "tinted-delta": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768529127,
+        "narHash": "sha256-fLWK7luBk63haI4i+LyJmTNlQO6oDUQhqxii+D6isA4=",
+        "owner": "tinted-theming",
+        "repo": "tinted-delta",
+        "rev": "35d2d2617ec46803b1cf77db13974bd46b019347",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-delta",
+        "type": "github"
+      }
+    },
+    "tinted-fzf": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768700828,
+        "narHash": "sha256-coVZ8U2bMdPoPkkDixLNZ5x9i/BkHDTye85OuVtcxR0=",
+        "owner": "tinted-theming",
+        "repo": "tinted-fzf",
+        "rev": "655ec64c9afaef7f2e8bb2ddc6f529113fb24daf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-fzf",
+        "type": "github"
+      }
+    },
+    "tinted-jqp": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768697772,
+        "narHash": "sha256-cwOwK+4/tUAOl8nn2myOxGjEP4XUqqWdSVnb/QV+UDI=",
+        "owner": "tinted-theming",
+        "repo": "tinted-jqp",
+        "rev": "30f9845e44f3004fe27792f9ae057a0025e2657b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-jqp",
+        "type": "github"
+      }
+    },
+    "tinted-matlab": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768946357,
+        "narHash": "sha256-oQDMHBUO/ooAwPWMRWqOp6gmuiEDY2QdcXbhgrQlOgw=",
+        "owner": "tinted-theming",
+        "repo": "tinted-matlab",
+        "rev": "a005e6e4bbbe3b2ecdf64ccfe7b2699766f47b8d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-matlab",
+        "type": "github"
+      }
+    },
+    "tinted-nvim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768526213,
+        "narHash": "sha256-p3wM3oIYna39AtFf9SnuOK1kM6/RWc2ktjo0gE5fn1g=",
+        "owner": "tinted-theming",
+        "repo": "tinted-nvim",
+        "rev": "7dfd6456abd855bed658c9589cf4b784aceab7bc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-nvim",
+        "type": "github"
+      }
+    },
+    "tinted-shell": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768701966,
+        "narHash": "sha256-jpwyyZruUkmesB00ZssO7FWS8q98WzRajVUjp/35X9c=",
+        "owner": "tinted-theming",
+        "repo": "tinted-shell",
+        "rev": "0264ab4e40599bb69dcf271388e52d1f15bcb7aa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-shell",
+        "type": "github"
+      }
+    },
+    "tinted-sublime-text": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768700445,
+        "narHash": "sha256-eiXiyhqHwwFNWj8G1Lj8Lq1MTfjoW4MFca2PYAkSyAs=",
+        "owner": "tinted-theming",
+        "repo": "tinted-sublime-text",
+        "rev": "bac15e630302f00b12027406446d8f24757140fa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-sublime-text",
+        "type": "github"
+      }
+    },
+    "tinted-terminal": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768917026,
+        "narHash": "sha256-svKHVtGTQS497C0zxRa4C1Ibw+OBS1OJt76d70X2riA=",
+        "owner": "tinted-theming",
+        "repo": "tinted-terminal",
+        "rev": "2b842ca88b0e2b209e10c465d407ae227baab7fa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-terminal",
+        "type": "github"
+      }
+    },
+    "tinted-tmux": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768699176,
+        "narHash": "sha256-O1YaP8HHExlU3Qfsc+F5YpZaWuLIH3UsO1bgsVVBjK8=",
+        "owner": "tinted-theming",
+        "repo": "tinted-tmux",
+        "rev": "f8ca8735cff140ba51239f18177e7f43f9733826",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-tmux",
+        "type": "github"
+      }
+    },
+    "tinted-tridactyl": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1748897426,
+        "narHash": "sha256-wexs/60s2QhrofxYoqlPGfX251AgF3wX8UO4ZOyKsWc=",
+        "owner": "tinted-theming",
+        "repo": "tinted-tridactyl",
+        "rev": "edc6cf06afd1b763b0d36c49cea15a0da2a8887e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-tridactyl",
+        "type": "github"
+      }
+    },
+    "tinted-vim": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768527792,
+        "narHash": "sha256-64z0pj1CbrztbK+c8zJbD2lyDX0FIbUVy1dqyz46f78=",
+        "owner": "tinted-theming",
+        "repo": "tinted-vim",
+        "rev": "3d4aefaa003ad96535a51ff54d579ecd13fbdb0f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-vim",
+        "type": "github"
+      }
+    },
+    "tinted-vscode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768703327,
+        "narHash": "sha256-6TNSX8sbHoXQq7QvTQmRc+u43KHUM+61670JgunlfBU=",
+        "owner": "tinted-theming",
+        "repo": "tinted-vscode",
+        "rev": "a2cad3e66b5b963ec4026f5f2f7eae16fabe2b47",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-vscode",
+        "type": "github"
+      }
+    },
+    "tinted-xresources": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768698486,
+        "narHash": "sha256-gK9uCpDZ5ILAdH4vpuo/kaKAIRv2xTrbRFOgUoH1S84=",
+        "owner": "tinted-theming",
+        "repo": "tinted-xresources",
+        "rev": "e9819d936dfa81825174678debde0d3e18befb9c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-xresources",
+        "type": "github"
+      }
+    },
+    "tinted-yazi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768527841,
+        "narHash": "sha256-zgiEI1JCenebUnJBOW7e9TPU0pD+SUrS9HIoGCCFMxM=",
+        "owner": "tinted-theming",
+        "repo": "tinted-yazi",
+        "rev": "30cce501d1621a5dacb10a017c1ad11321bbf7bf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tinted-theming",
+        "repo": "tinted-yazi",
         "type": "github"
       }
     }

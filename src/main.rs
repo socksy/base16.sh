@@ -207,8 +207,20 @@ impl SchemeIndex {
 #[derive(Debug)]
 struct TemplateInfo {
     name: String,
-    path: String,
+    base16_path: Option<String>,
+    base24_path: Option<String>,
     _repo: String,
+}
+
+impl TemplateInfo {
+    fn path_for_system(&self, system: &str) -> Option<&str> {
+        match system {
+            // base24 schemes can use base24 templates, or fallback to base16 templates
+            "base24" => self.base24_path.as_deref().or(self.base16_path.as_deref()),
+            // base16 schemes can only use base16 templates (base24 templates need extra colors)
+            _ => self.base16_path.as_deref(),
+        }
+    }
 }
 
 struct TemplateIndex {
@@ -240,24 +252,121 @@ impl TemplateIndex {
                             continue;
                         }
 
+                        let is_tinted = repo_name.starts_with("tinted-");
+                        let tinted_short = repo_name.strip_prefix("tinted-").unwrap_or("");
                         let template_count = config.len();
 
                         for (template_name, _) in config.iter() {
                             let mustache_file = format!("{}.mustache", template_name);
                             let template_path = repo_path.join(format!("templates/{}", mustache_file));
 
-                            if template_path.exists() {
-                                let key = if template_count == 1 || template_name == "default" {
-                                    short_repo.clone()
-                                } else {
-                                    format!("{}-{}", short_repo, template_name)
-                                };
+                            // Also check for head+body split format
+                            let body_path = repo_path.join("templates/body.mustache");
+                            let actual_path = if template_path.exists() {
+                                template_path
+                            } else if body_path.exists() {
+                                body_path
+                            } else {
+                                continue;
+                            };
 
-                                templates.insert(key.clone(), TemplateInfo {
-                                    name: key,
-                                    path: template_path.to_string_lossy().to_string(),
-                                    _repo: repo_name.to_string(),
-                                });
+                            {
+                                let path_str = actual_path.to_string_lossy().to_string();
+
+                                if is_tinted {
+                                    // Parse template name to extract key and variant
+                                    // Patterns: "name-base16", "base16-name", "base16", "base16.ext"
+                                    let parsed = if let Some(base) = template_name.strip_suffix("-base16") {
+                                        Some((base.to_string(), "base16"))
+                                    } else if let Some(base) = template_name.strip_suffix("-base24") {
+                                        Some((base.to_string(), "base24"))
+                                    } else if let Some(base) = template_name.strip_suffix("-base16-16") {
+                                        Some((base.to_string(), "base16"))
+                                    } else if let Some(base) = template_name.strip_suffix("-base24-16") {
+                                        Some((base.to_string(), "base24"))
+                                    } else if let Some(rest) = template_name.strip_prefix("base16-") {
+                                        let key = if rest == "default" {
+                                            tinted_short.to_string()
+                                        } else {
+                                            format!("{}-{}", tinted_short, rest)
+                                        };
+                                        Some((key, "base16"))
+                                    } else if let Some(rest) = template_name.strip_prefix("base24-") {
+                                        let key = if rest == "default" {
+                                            tinted_short.to_string()
+                                        } else {
+                                            format!("{}-{}", tinted_short, rest)
+                                        };
+                                        Some((key, "base24"))
+                                    } else if let Some(ext) = template_name.strip_prefix("base16.") {
+                                        // tinted-nvim: base16.lua → nvim (skip .vim)
+                                        if tinted_short == "nvim" && ext == "vim" {
+                                            None
+                                        } else {
+                                            Some((tinted_short.to_string(), "base16"))
+                                        }
+                                    } else if let Some(ext) = template_name.strip_prefix("base24.") {
+                                        if tinted_short == "nvim" && ext == "vim" {
+                                            None
+                                        } else {
+                                            Some((tinted_short.to_string(), "base24"))
+                                        }
+                                    } else if template_name == "base16" {
+                                        Some((tinted_short.to_string(), "base16"))
+                                    } else if template_name == "base24" {
+                                        Some((tinted_short.to_string(), "base24"))
+                                    } else if template_name == &format!("tinted-{}", tinted_short) {
+                                        // tinted-vim: template named "tinted-vim" supports both
+                                        Some((tinted_short.to_string(), "both"))
+                                    } else {
+                                        None
+                                    };
+
+                                    if let Some((base_name, variant)) = parsed {
+                                        let key = sanitize_name(&base_name);
+                                        let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
+                                            name: key.clone(),
+                                            base16_path: None,
+                                            base24_path: None,
+                                            _repo: repo_name.to_string(),
+                                        });
+
+                                        match variant {
+                                            "base16" => entry.base16_path = Some(path_str),
+                                            "base24" => entry.base24_path = Some(path_str),
+                                            "both" => {
+                                                entry.base16_path = Some(path_str.clone());
+                                                entry.base24_path = Some(path_str);
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                } else {
+                                    // For css-etc/styles, use template name directly (css, scss, less, etc.)
+                                    let key = if template_count == 1 || template_name == "default" {
+                                        short_repo.clone()
+                                    } else if short_repo == "css-etc" || short_repo == "styles" {
+                                        template_name.to_string()
+                                    } else {
+                                        format!("{}-{}", short_repo, template_name)
+                                    };
+
+                                    // Determine if this is a base16 or base24 template based on repo name
+                                    let is_base24_repo = repo_name.starts_with("base24-");
+
+                                    let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
+                                        name: key,
+                                        base16_path: None,
+                                        base24_path: None,
+                                        _repo: repo_name.to_string(),
+                                    });
+
+                                    if is_base24_repo {
+                                        entry.base24_path = Some(path_str);
+                                    } else {
+                                        entry.base16_path = Some(path_str);
+                                    }
+                                }
                             }
                         }
                     }
@@ -803,8 +912,25 @@ async fn handle_scheme_template(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
     };
 
-    let template_str = match std::fs::read_to_string(&template_info.path) {
-        Ok(s) => s,
+    let template_path = match template_info.path_for_system(&scheme_info.system) {
+        Some(p) => p,
+        None => return (StatusCode::NOT_FOUND, format!("Template '{}' not available for {}", sanitized_template, scheme_info.system)).into_response(),
+    };
+
+    let template_str = match std::fs::read_to_string(template_path) {
+        Ok(s) => {
+            // If using body.mustache, prepend head.mustache if it exists
+            if template_path.ends_with("body.mustache") {
+                let head_path = template_path.replace("body.mustache", "head.mustache");
+                if let Ok(head) = std::fs::read_to_string(&head_path) {
+                    format!("{}\n{}", head, s)
+                } else {
+                    s
+                }
+            } else {
+                s
+            }
+        }
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read template file").into_response(),
     };
 
