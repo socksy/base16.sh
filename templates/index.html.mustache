@@ -52,6 +52,25 @@
         }
         header p { color: var(--muted); }
         header a { color: var(--accent); }
+        header .curl-examples {
+            margin: 16px 0;
+            padding: 12px 16px;
+            background: color-mix(in srgb, var(--fg) 5%, transparent);
+            border: 1px solid color-mix(in srgb, var(--fg) 15%, transparent);
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+        header .curl-examples .comment { color: var(--muted); }
+        header .header-links { margin-top: 12px; }
+        header kbd {
+            background: color-mix(in srgb, var(--fg) 10%, transparent);
+            border: 1px solid color-mix(in srgb, var(--fg) 20%, transparent);
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: inherit;
+            font-size: 12px;
+        }
 
         section { margin-bottom: 60px; }
         .section-header {
@@ -235,7 +254,11 @@
     <div class="container">
         <header>
             <h1 id="site-title">base16.sh</h1>
-            <p>color schemes for terminals + editors / <a href="/--help">api</a> / <a href="#" onclick="goRandom(); return false">random</a></p>
+            <p>color schemes that work across your terminal, vim, tmux, and 70+ apps.<br>
+            pick a palette → choose your app → download the config.</p>
+            <pre class="curl-examples">curl -L base16.sh/monokai/alacritty           <span class="comment"># grab a config</span>
+curl -L base16.sh/?format=json | jq .schemes  <span class="comment"># list all schemes</span></pre>
+            <p class="header-links">press <kbd>?</kbd> for shortcuts / <a href="/--help">api docs</a> / <a href="#" onclick="goRandom(); return false">random</a></p>
         </header>
 
         <section>
