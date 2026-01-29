@@ -141,7 +141,7 @@
             display: grid;
             grid-template-columns: 280px 1fr;
             gap: 40px;
-            padding: 16px 12px;
+            padding: 8px 12px;
             margin: 0 -12px;
             text-decoration: none;
             color: inherit;
@@ -150,9 +150,13 @@
         .scheme:hover { background: var(--fg); color: var(--bg); }
         .scheme:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
         .scheme.kbd-selected { background: color-mix(in srgb, var(--fg) 20%, transparent); }
+        /* Mutual exclusivity: kbd-mode suppresses hover, mouse-mode suppresses kbd-selected */
+        .schemes.kbd-mode .scheme:hover:not(.kbd-selected) { background: transparent; color: var(--fg); }
+        .schemes.mouse-mode .scheme.kbd-selected:not(:hover) { background: transparent; }
         .scheme-name { font-weight: 400; font-size: 18px; }
         .scheme-palette { height: 24px; }
         .scheme[data-system="base24"] .scheme-palette-bar { height: 48px; }
+        .scheme[data-system="base16"] { padding-top: 20px; padding-bottom: 20px; } /* 12px extra each side to match base24 height */
         .scheme-palette svg { width: 100%; height: 100%; display: block; }
         .scheme-palette-grid { display: none; }
         .grid-view .scheme-palette-bar { display: none; }
@@ -168,6 +172,10 @@
         .grid-view .scheme:hover { background: transparent; }
         .grid-view .scheme.kbd-selected { outline: 3px solid var(--accent); outline-offset: -3px; background: transparent; }
         .grid-view .scheme.kbd-selected .scheme-name { opacity: 1; }
+        /* Grid view mutual exclusivity */
+        .schemes.kbd-mode.grid-view .scheme:hover:not(.kbd-selected) .scheme-name { opacity: 0; }
+        .schemes.mouse-mode.grid-view .scheme.kbd-selected:not(:hover) { outline: none; }
+        .schemes.mouse-mode.grid-view .scheme.kbd-selected:not(:hover) .scheme-name { opacity: 0; }
         .grid-view .scheme-name {
             position: absolute;
             bottom: 0;
@@ -456,6 +464,23 @@ curl -L base16.sh/?format=json | jq .schemes  <span class="comment"># list all s
 
         // Vim-style keyboard navigation
         let kbdIndex = -1;
+        let lastHoveredScheme = null;
+
+        // Track interaction mode for mutual exclusivity of hover vs kbd selection
+        function setInteractionMode(mode) {
+            const schemes = document.getElementById('schemes');
+            schemes.classList.remove('mouse-mode', 'kbd-mode');
+            if (mode) schemes.classList.add(mode + '-mode');
+        }
+
+        // Track mouse hover on schemes
+        document.getElementById('schemes').addEventListener('mouseover', function(e) {
+            const scheme = e.target.closest('.scheme');
+            if (scheme && getComputedStyle(scheme).display !== 'none') {
+                lastHoveredScheme = scheme;
+                setInteractionMode('mouse');
+            }
+        });
         function getVisibleSchemes() {
             const schemes = document.getElementById('schemes');
             const visible = Array.from(schemes.querySelectorAll('.scheme')).filter(s => {
@@ -470,9 +495,24 @@ curl -L base16.sh/?format=json | jq .schemes  <span class="comment"># list all s
             }
             return visible;
         }
-        function updateKbdSelection(newIndex) {
+        function updateKbdSelection(newIndex, delta) {
             const visible = getVisibleSchemes();
             if (visible.length === 0) return;
+
+            // If switching from mouse mode and we have a hovered scheme, start from there
+            const schemes = document.getElementById('schemes');
+            if (schemes.classList.contains('mouse-mode') && lastHoveredScheme) {
+                const hoveredIndex = visible.indexOf(lastHoveredScheme);
+                if (hoveredIndex >= 0) {
+                    kbdIndex = hoveredIndex;
+                    // Apply the delta to move from the hovered position
+                    if (delta !== undefined) {
+                        newIndex = kbdIndex + delta;
+                    }
+                }
+            }
+
+            setInteractionMode('kbd');
             document.querySelectorAll('.scheme.kbd-selected').forEach(s => s.classList.remove('kbd-selected'));
             kbdIndex = Math.max(0, Math.min(newIndex, visible.length - 1));
             const selected = visible[kbdIndex];
@@ -490,9 +530,20 @@ curl -L base16.sh/?format=json | jq .schemes  <span class="comment"># list all s
         }
         function navigateToSelected() {
             const visible = getVisibleSchemes();
+            const schemes = document.getElementById('schemes');
+
+            // If in mouse mode and we have a hovered scheme, navigate to it
+            if (schemes.classList.contains('mouse-mode') && lastHoveredScheme) {
+                const hoveredIndex = visible.indexOf(lastHoveredScheme);
+                if (hoveredIndex >= 0) {
+                    const url = schemes.classList.contains('sort-color') ? lastHoveredScheme.href + '?order=color' : lastHoveredScheme.href;
+                    saveScrollAndNavigate(url, hoveredIndex);
+                    return;
+                }
+            }
+
             if (kbdIndex >= 0 && kbdIndex < visible.length) {
                 const link = visible[kbdIndex];
-                const schemes = document.getElementById('schemes');
                 const url = schemes.classList.contains('sort-color') ? link.href + '?order=color' : link.href;
                 saveScrollAndNavigate(url, kbdIndex);
             }
@@ -515,10 +566,10 @@ curl -L base16.sh/?format=json | jq .schemes  <span class="comment"># list all s
             const cols = getGridColumns();
             const isGrid = cols > 1;
             switch (e.key) {
-                case 'h': if (isGrid) { updateKbdSelection(kbdIndex - 1); e.preventDefault(); } break;
-                case 'j': updateKbdSelection(kbdIndex + cols); e.preventDefault(); break;
-                case 'k': updateKbdSelection(kbdIndex - cols); e.preventDefault(); break;
-                case 'l': if (isGrid) { updateKbdSelection(kbdIndex + 1); } else { navigateToSelected(); } e.preventDefault(); break;
+                case 'h': if (isGrid) { updateKbdSelection(kbdIndex - 1, -1); e.preventDefault(); } break;
+                case 'j': updateKbdSelection(kbdIndex + cols, cols); e.preventDefault(); break;
+                case 'k': updateKbdSelection(kbdIndex - cols, -cols); e.preventDefault(); break;
+                case 'l': if (isGrid) { updateKbdSelection(kbdIndex + 1, 1); } else { navigateToSelected(); } e.preventDefault(); break;
                 case 'g': if (!e.shiftKey) { updateKbdSelection(0); e.preventDefault(); } break;
                 case 'G': updateKbdSelection(visible.length - 1); e.preventDefault(); break;
                 case 'Enter': navigateToSelected(); e.preventDefault(); break;
