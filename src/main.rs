@@ -203,11 +203,12 @@ impl SchemeIndex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct TemplateInfo {
     name: String,
     base16_path: Option<String>,
     base24_path: Option<String>,
+    extension: String,
     _repo: String,
 }
 
@@ -218,6 +219,14 @@ impl TemplateInfo {
             "base24" => self.base24_path.as_deref().or(self.base16_path.as_deref()),
             // base16 schemes can only use base16 templates (base24 templates need extra colors)
             _ => self.base16_path.as_deref(),
+        }
+    }
+
+    fn download_filename(&self, slug: &str) -> String {
+        if self.extension.is_empty() {
+            format!("{}.{}", slug, self.name)
+        } else {
+            format!("{}{}", slug, self.extension)
         }
     }
 }
@@ -272,6 +281,29 @@ fn parse_tinted_template_name(name: &str, tinted_short: &str) -> Option<(String,
     None
 }
 
+#[derive(Debug, Deserialize)]
+struct TemplateConfigEntry {
+    #[serde(default)]
+    extension: Option<String>,
+    #[serde(default)]
+    filename: Option<String>,
+}
+
+impl TemplateConfigEntry {
+    fn extension(&self) -> String {
+        if let Some(ext) = &self.extension {
+            return ext.clone();
+        }
+        if let Some(filename) = &self.filename {
+            let clean = filename.replace("{{ ", "").replace(" }}", "").replace("{{", "").replace("}}", "");
+            if let Some(dot_pos) = clean.rfind('.') {
+                return clean[dot_pos..].to_string();
+            }
+        }
+        String::new()
+    }
+}
+
 struct TemplateIndex {
     templates: HashMap<String, TemplateInfo>,
 }
@@ -291,7 +323,7 @@ impl TemplateIndex {
                 let config_path = repo_path.join("templates/config.yaml");
 
                 if let Ok(config_str) = std::fs::read_to_string(&config_path)
-                    && let Ok(config) = serde_yaml::from_str::<HashMap<String, serde_yaml::Value>>(&config_str) {
+                    && let Ok(config) = serde_yaml::from_str::<HashMap<String, TemplateConfigEntry>>(&config_str) {
                         let short_repo = sanitize_name(
                             repo_name
                                 .trim_start_matches("base16-")
@@ -305,7 +337,7 @@ impl TemplateIndex {
                         let tinted_short = repo_name.strip_prefix("tinted-").unwrap_or("");
                         let template_count = config.len();
 
-                        for (template_name, _) in config.iter() {
+                        for (template_name, config_entry) in config.iter() {
                             let mustache_file = format!("{}.mustache", template_name);
                             let template_path = repo_path.join(format!("templates/{}", mustache_file));
                             let body_path = repo_path.join("templates/body.mustache");
@@ -336,12 +368,18 @@ impl TemplateIndex {
                                 }
                             };
 
+                            let extension = config_entry.extension();
                             let entry = templates.entry(key.clone()).or_insert_with(|| TemplateInfo {
                                 name: key,
                                 base16_path: None,
                                 base24_path: None,
+                                extension: extension.clone(),
                                 _repo: repo_name.to_string(),
                             });
+                            // Update extension if this entry has one and existing doesn't
+                            if entry.extension.is_empty() && !extension.is_empty() {
+                                entry.extension = extension;
+                            }
 
                             match variant {
                                 "base16" => entry.base16_path = Some(path_str),
@@ -370,6 +408,14 @@ impl TemplateIndex {
         let mut names: Vec<String> = self.templates.keys().cloned().collect();
         names.sort();
         names
+    }
+
+    fn templates_for_system(&self, system: &str) -> Vec<&TemplateInfo> {
+        let mut templates: Vec<&TemplateInfo> = self.templates.values()
+            .filter(|t| t.path_for_system(system).is_some())
+            .collect();
+        templates.sort_by(|a, b| a.name.cmp(&b.name));
+        templates
     }
 }
 
@@ -642,13 +688,28 @@ async fn handle_scheme(
 
         let schemes_json = serde_json::to_string(&SCHEME_INDEX.names_sorted).unwrap();
 
+        // Get templates compatible with this scheme's system
+        let templates = TEMPLATE_INDEX.templates_for_system(&scheme_info.system);
+        let slug = slugify(&scheme_data.name);
+
         let mut data = MapBuilder::new()
             .insert_str("scheme-name", &scheme_data.name)
+            .insert_str("scheme-slug", &slug)
             .insert_str("scheme-author", &scheme_data.author)
             .insert_str("scheme-system", &scheme_info.system)
             .insert_str("palette-svg", &palette_svg)
             .insert_str("yaml-colorized", colorize_yaml_hex_values(&scheme_yaml_str, &fg))
-            .insert_str("schemes-json", &schemes_json);
+            .insert_str("schemes-json", &schemes_json)
+            .insert_vec("templates", |mut vec| {
+                for template in &templates {
+                    vec = vec.push_map(|map| {
+                        map.insert_str("name", &template.name)
+                           .insert_str("filename", template.download_filename(&slug))
+                           .insert_str("url", format!("/{}/{}", scheme_info.name, template.name))
+                    });
+                }
+                vec
+            });
 
         if let Some(prev_name) = prev {
             data = data.insert_str("prev-scheme", prev_name)
@@ -995,6 +1056,7 @@ async fn handle_scheme_template(
 
     Response::builder()
         .header("content-type", "text/plain; charset=utf-8")
+        .header("content-disposition", format!("attachment; filename=\"{}\"", template_info.download_filename(&slug)))
         .header("x-scheme-name", &scheme_info.name)
         .header("x-template-name", &template_info.name)
         .body(Body::from(rendered))

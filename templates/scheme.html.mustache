@@ -126,6 +126,24 @@
         footer a:hover {
             color: var(--fg);
         }
+
+        .downloads-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .download-link {
+            display: inline-block;
+            padding: 4px 10px;
+            border: 1px solid var(--fg);
+            color: var(--fg);
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .download-link:hover {
+            background: var(--fg);
+            color: var(--bg);
+        }
     </style>
 </head>
 <body>
@@ -188,6 +206,15 @@
             <div class="yaml-block">
                 <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('yaml').textContent)">copy</button>
                 <pre id="yaml">{{{yaml-colorized}}}</pre>
+            </div>
+        </section>
+
+        <section>
+            <h2 title="base03">Downloads</h2>
+            <div class="downloads-grid">
+                {{#templates}}
+                <a href="{{url}}" class="download-link" download="{{filename}}" title="Download {{filename}}">{{name}}</a>
+                {{/templates}}
             </div>
         </section>
 
