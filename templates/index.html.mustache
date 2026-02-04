@@ -3,12 +3,28 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>base16.sh</title>
+    <title>base16.sh - {{scheme-count}} Color Schemes for Terminal, Vim, Tmux & More</title>
+    <meta name="description" content="Browse {{scheme-count}} Base16 and Base24 color schemes for your terminal, vim, tmux, and 70+ apps. Download configs instantly with curl or browse visually. Includes popular themes like Monokai, Dracula, Gruvbox, and Nord.">
+    <link rel="canonical" href="https://base16.sh/">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="base16.sh - {{scheme-count}} Color Schemes for Developers">
+    <meta property="og:description" content="Browse {{scheme-count}} Base16/Base24 color schemes for terminal, vim, tmux, and 70+ apps. Download configs instantly.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://base16.sh/">
+    <meta property="og:image" content="https://base16.sh/og/monokai">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="base16.sh - {{scheme-count}} Color Schemes for Developers">
+    <meta name="twitter:description" content="Browse {{scheme-count}} Base16/Base24 color schemes for terminal, vim, tmux, and 70+ apps.">
+    <meta name="twitter:image" content="https://base16.sh/og/monokai">
+
     <script>
         (function() {
             var host = location.hostname;
             var title = host === 'base24.sh' ? 'base24.sh' : 'base16.sh';
-            document.title = title;
+            document.title = title + ' - {{scheme-count}} Color Schemes for Terminal, Vim, Tmux & More';
             document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('site-title').textContent = title;
             });
@@ -16,6 +32,7 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&display=swap" as="style">
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {

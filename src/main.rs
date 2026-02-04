@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
+use resvg::usvg;
+use tiny_skia::Pixmap;
 
 static SCHEME_INDEX: Lazy<SchemeIndex> = Lazy::new(|| {
     SchemeIndex::load().expect("Failed to load scheme index")
@@ -33,6 +35,11 @@ static INDEX_TEMPLATE: Lazy<mustache::Template> = Lazy::new(|| {
 static SCHEME_TEMPLATE: Lazy<mustache::Template> = Lazy::new(|| {
     mustache::compile_path("templates/scheme.html.mustache")
         .expect("Failed to load scheme template")
+});
+
+static OG_IMAGE_TEMPLATE: Lazy<mustache::Template> = Lazy::new(|| {
+    mustache::compile_path("templates/og.svg.mustache")
+        .expect("Failed to load OG image template")
 });
 
 #[derive(Debug)]
@@ -905,9 +912,10 @@ async fn handle_help(
 
         text.push_str("Endpoints:\n");
         text.push_str("  GET /                      - list schemes and templates (HTML/JSON/YAML)\n");
-        text.push_str("  GET /{scheme}              - scheme colors (YAML/JSON)\n");
+        text.push_str("  GET /{scheme}              - scheme colors (YAML/JSON/HTML)\n");
         text.push_str("  GET /{scheme}/{template}   - render scheme through template\n");
         text.push_str("  GET /--random              - redirect to random scheme\n");
+        text.push_str("  GET /--random/{template}   - redirect to random scheme with template\n");
         text.push_str("  GET /--help                - this help (text/JSON)\n");
         text.push_str("\nFormat selection:\n");
         text.push_str("  ?format=json|yaml|html     - explicit format\n");
@@ -1096,12 +1104,274 @@ async fn handle_random_template(Path(template): Path<String>) -> Response {
         .unwrap()
 }
 
+async fn handle_sitemap() -> Response {
+    let mut xml = String::from(r#"<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://base16.sh/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+"#);
+
+    for scheme_name in &SCHEME_INDEX.names_sorted {
+        xml.push_str(&format!(
+            r#"  <url>
+    <loc>https://base16.sh/{}</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+"#,
+            scheme_name
+        ));
+    }
+
+    xml.push_str("</urlset>\n");
+
+    Response::builder()
+        .header("content-type", "application/xml; charset=utf-8")
+        .header("cache-control", "public, max-age=86400")
+        .body(Body::from(xml))
+        .unwrap()
+}
+
+async fn handle_robots() -> Response {
+    let robots = format!(
+        "User-agent: *\nAllow: /\n\nSitemap: https://base16.sh/sitemap.xml\n"
+    );
+
+    Response::builder()
+        .header("content-type", "text/plain; charset=utf-8")
+        .header("cache-control", "public, max-age=86400")
+        .body(Body::from(robots))
+        .unwrap()
+}
+
+async fn handle_llms_txt() -> Response {
+    let llms_txt = format!(
+        r#"# base16.sh - Base16/Base24 Color Scheme Distribution
+
+## Description
+base16.sh serves over {} Base16 and Base24 color schemes for terminals, editors, and 70+ applications.
+Base16 provides carefully chosen syntax highlighting using a base of sixteen colors.
+Base24 extends this with eight additional accent colors for more expressive themes.
+
+## API Endpoints
+
+### List all schemes
+GET / (Accept: application/json)
+GET /?format=json
+Returns: {{"schemes": [...], "templates": [...]}}
+
+### Get a specific scheme
+GET /{{scheme}} (Accept: application/yaml)
+GET /{{scheme}}?format=json
+GET /{{scheme}} (Accept: text/html)
+Returns: Scheme YAML, JSON, or HTML preview with color palette
+
+### Render scheme through template
+GET /{{scheme}}/{{template}}
+Returns: Rendered config file for the specified application
+
+### Random scheme discovery
+GET /--random
+Returns: 302 redirect to a random scheme
+
+GET /--random/{{template}}
+Returns: 302 redirect to a random scheme rendered with the specified template
+
+### Available schemes
+{}
+
+### Available templates
+{}
+
+## Examples
+curl -L base16.sh/monokai/vim
+curl -L base16.sh/dracula/alacritty
+curl -L base16.sh/--random/kitty
+curl -L base16.sh/?format=json | jq .schemes
+
+## Features
+- Fuzzy scheme name matching (e.g., /monoki redirects to /monokai)
+- Content negotiation via Accept header
+- 70+ application templates (vim, neovim, terminal emulators, tmux, etc.)
+- Both Base16 (16 colors) and Base24 (24 colors) schemes
+
+## Documentation
+Full API documentation: https://base16.sh/--help
+GitHub: https://github.com/socksy/base16.sh
+Base16 specification: https://github.com/tinted-theming/home
+"#,
+        SCHEME_INDEX.schemes.len(),
+        SCHEME_INDEX.names_sorted.join(", "),
+        TEMPLATE_INDEX.sorted_names().join(", ")
+    );
+
+    Response::builder()
+        .header("content-type", "text/plain; charset=utf-8")
+        .header("cache-control", "public, max-age=86400")
+        .body(Body::from(llms_txt))
+        .unwrap()
+}
+
+fn build_og_image_svg(scheme_data: &SchemeYaml, scheme_name: &str, _scheme_author: &str, is_base24: bool) -> String {
+    // Render template with text content
+    let data = MapBuilder::new()
+        .insert_str("scheme-name", scheme_name)
+        .insert_bool("is-base24", is_base24)
+        .build();
+
+    let mut svg = OG_IMAGE_TEMPLATE.render_data_to_string(&data)
+        .unwrap_or_else(|_| String::from("<svg></svg>"));
+
+    // Replace Dracula default colors with actual scheme colors using string replacement
+    // This lets the SVG be viewable in Inkscape with defaults while still being dynamic
+
+    // Default Dracula palette (what's in the template)
+    let dracula_colors = [
+        ("#282a36", "base00"), ("#363447", "base01"), ("#44475a", "base02"), ("#6272a4", "base03"),
+        ("#9ea8c7", "base04"), ("#f8f8f2", "base05"), ("#f0f1f4", "base06"), ("#ffffff", "base07"),
+        ("#ff5555", "base08"), ("#ffb86c", "base09"), ("#f1fa8c", "base0A"), ("#50fa7b", "base0B"),
+        ("#8be9fd", "base0C"), ("#80bfff", "base0D"), ("#ff79c6", "base0E"), ("#bd93f9", "base0F"),
+    ];
+
+    // Replace each Dracula color with the scheme's actual color
+    for (dracula_hex, base_key) in dracula_colors {
+        if let Some(scheme_color) = scheme_data.palette.get(base_key) {
+            let scheme_hex = if scheme_color.starts_with('#') {
+                scheme_color.clone()
+            } else {
+                format!("#{}", scheme_color)
+            };
+            svg = svg.replace(dracula_hex, &scheme_hex);
+        }
+    }
+
+    // Replace Base24 extra colors (base10-base17) if present
+    if is_base24 {
+        // Default Dracula Base24 extra colors (reordered to align bright colors with base colors)
+        let base24_defaults = [
+            ("#f28c8c", "base12"), ("#1e2029", "base10"), ("#eef5a3", "base13"), ("#a3f5b8", "base14"),
+            ("#baedf7", "base15"), ("#a3ccf5", "base16"), ("#f5a3d2", "base17"), ("#16171d", "base11"),
+        ];
+
+        for (default_hex, base_key) in base24_defaults {
+            if let Some(scheme_color) = scheme_data.palette.get(base_key) {
+                let scheme_hex = if scheme_color.starts_with('#') {
+                    scheme_color.clone()
+                } else {
+                    format!("#{}", scheme_color)
+                };
+                svg = svg.replace(default_hex, &scheme_hex);
+            }
+        }
+    }
+
+    // Replace all instances of "Monokai" with the actual scheme name
+    svg = svg.replace("Monokai", scheme_name);
+
+    svg
+}
+
+async fn handle_og_image(Path(SchemePath { scheme }): Path<SchemePath>) -> Response {
+    let sanitized = sanitize_name(&scheme);
+
+    // Check cache directory
+    let cache_dir = std::path::Path::new(".cache/og");
+    if let Err(_) = std::fs::create_dir_all(cache_dir) {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create cache directory").into_response();
+    }
+
+    let cache_path = cache_dir.join(format!("{}.png", sanitized));
+
+    // Try to serve from cache
+    if cache_path.exists() {
+        if let Ok(png_data) = std::fs::read(&cache_path) {
+            return Response::builder()
+                .header("content-type", "image/png")
+                .header("cache-control", "public, max-age=31536000, immutable")
+                .body(Body::from(png_data))
+                .unwrap();
+        }
+    }
+
+    // Generate new image
+    let scheme_info = match SCHEME_INDEX.find_exact(&sanitized)
+        .or_else(|| SCHEME_INDEX.find_fuzzy(&sanitized, 0.8)) {
+        Some(info) => info,
+        None => return (StatusCode::NOT_FOUND, format!("Scheme '{}' not found", sanitized)).into_response(),
+    };
+
+    let scheme_yaml_str = match std::fs::read_to_string(&scheme_info.path) {
+        Ok(s) => s,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read scheme file").into_response(),
+    };
+
+    let scheme_data: SchemeYaml = match serde_yaml::from_str(&scheme_yaml_str) {
+        Ok(d) => d,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse scheme YAML").into_response(),
+    };
+
+    let is_base24 = scheme_info.system == "base24";
+    let svg_data = build_og_image_svg(&scheme_data, &scheme_data.name, &scheme_data.author, is_base24);
+
+    // Convert SVG to PNG using resvg with custom fonts
+    let mut fontdb = resvg::usvg::fontdb::Database::new();
+    fontdb.load_system_fonts();
+
+    // Load Atkinson Hyperlegible Mono fonts
+    let font_dir = std::path::Path::new(".cache/fonts");
+    if font_dir.exists() {
+        if let Ok(font_data) = std::fs::read(font_dir.join("AtkinsonHyperlegibleMono-Regular.ttf")) {
+            fontdb.load_font_data(font_data);
+        }
+        if let Ok(font_data) = std::fs::read(font_dir.join("AtkinsonHyperlegibleMono-Bold.ttf")) {
+            fontdb.load_font_data(font_data);
+        }
+    }
+
+    let mut opt = usvg::Options::default();
+    opt.fontdb = std::sync::Arc::new(fontdb);
+
+    let tree = match usvg::Tree::from_str(&svg_data, &opt) {
+        Ok(t) => t,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse SVG").into_response(),
+    };
+
+    let size = tree.size();
+    let mut pixmap = match Pixmap::new(size.width() as u32, size.height() as u32) {
+        Some(p) => p,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create pixmap").into_response(),
+    };
+
+    resvg::render(&tree, usvg::Transform::default(), &mut pixmap.as_mut());
+
+    let png_data = match pixmap.encode_png() {
+        Ok(data) => data,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
+    };
+
+    // Cache the result
+    let _ = std::fs::write(&cache_path, &png_data);
+
+    Response::builder()
+        .header("content-type", "image/png")
+        .header("cache-control", "public, max-age=31536000, immutable")
+        .body(Body::from(png_data))
+        .unwrap()
+}
+
 fn create_app() -> Router {
     Router::new()
         .route("/", get(handle_index))
         .route("/--random", get(handle_random))
         .route("/--random/{template}", get(handle_random_template))
         .route("/--help", get(handle_help))
+        .route("/sitemap.xml", get(handle_sitemap))
+        .route("/robots.txt", get(handle_robots))
+        .route("/llms.txt", get(handle_llms_txt))
+        .route("/og/{scheme}", get(handle_og_image))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -1139,6 +1409,7 @@ async fn main() {
     Lazy::force(&TEMPLATE_INDEX);
     Lazy::force(&INDEX_TEMPLATE);
     Lazy::force(&SCHEME_TEMPLATE);
+    Lazy::force(&OG_IMAGE_TEMPLATE);
 
     let app = create_app();
 
