@@ -1080,10 +1080,27 @@ async fn handle_random(Query(query): Query<FormatQuery>) -> Response {
         .unwrap()
 }
 
+async fn handle_random_template(Path(template): Path<String>) -> Response {
+    use rand::seq::SliceRandom;
+    let scheme = SCHEME_INDEX.names_sorted
+        .choose(&mut rand::thread_rng())
+        .map(|s| s.as_str())
+        .unwrap_or("monokai");
+    let location = format!("/{}/{}", scheme, template);
+
+    Response::builder()
+        .status(StatusCode::TEMPORARY_REDIRECT)
+        .header(header::LOCATION, location)
+        .header(header::CACHE_CONTROL, "no-cache, no-store, must-revalidate")
+        .body(Body::empty())
+        .unwrap()
+}
+
 fn create_app() -> Router {
     Router::new()
         .route("/", get(handle_index))
         .route("/--random", get(handle_random))
+        .route("/--random/{template}", get(handle_random_template))
         .route("/--help", get(handle_help))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))
@@ -1591,5 +1608,27 @@ mod tests {
         assert_eq!(parse_tinted_template_name("random-name", "vim"), None);
         assert_eq!(parse_tinted_template_name("", "vim"), None);
         assert_eq!(parse_tinted_template_name("base15", "vim"), None);
+    }
+
+    #[tokio::test]
+    async fn test_random_template_redirect() {
+        let app = create_app();
+        let response = app
+            .oneshot(Request::builder().uri("/--random/vim").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            response.headers().get("cache-control").unwrap(),
+            "no-cache, no-store, must-revalidate"
+        );
+
+        let location = response.headers().get("location").unwrap().to_str().unwrap();
+        assert!(location.starts_with("/"));
+        assert!(location.ends_with("/vim"));
+        let parts: Vec<&str> = location.split('/').collect();
+        assert_eq!(parts.len(), 3);
+        assert!(SCHEME_INDEX.schemes.contains_key(parts[1]));
     }
 }
