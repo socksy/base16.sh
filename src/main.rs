@@ -1277,16 +1277,13 @@ fn build_og_image_svg(scheme_data: &SchemeYaml, scheme_name: &str, _scheme_autho
 async fn handle_og_image(Path(SchemePath { scheme }): Path<SchemePath>) -> Response {
     let sanitized = sanitize_name(&scheme);
 
-    // Check cache directory
+    // Try to use cache if available
     let cache_dir = std::path::Path::new(".cache/og");
-    if let Err(_) = std::fs::create_dir_all(cache_dir) {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create cache directory").into_response();
-    }
-
+    let cache_available = std::fs::create_dir_all(cache_dir).is_ok();
     let cache_path = cache_dir.join(format!("{}.png", sanitized));
 
-    // Try to serve from cache
-    if cache_path.exists() {
+    // Try to serve from cache if it exists
+    if cache_available && cache_path.exists() {
         if let Ok(png_data) = std::fs::read(&cache_path) {
             return Response::builder()
                 .header("content-type", "image/png")
@@ -1323,12 +1320,26 @@ async fn handle_og_image(Path(SchemePath { scheme }): Path<SchemePath>) -> Respo
     // Load Atkinson Hyperlegible Mono fonts
     let font_dir = std::path::Path::new(".cache/fonts");
     if font_dir.exists() {
-        if let Ok(font_data) = std::fs::read(font_dir.join("AtkinsonHyperlegibleMono-Regular.ttf")) {
-            fontdb.load_font_data(font_data);
+        let regular_path = font_dir.join("AtkinsonHyperlegibleMono-Regular.ttf");
+        let bold_path = font_dir.join("AtkinsonHyperlegibleMono-Bold.ttf");
+
+        match std::fs::read(&regular_path) {
+            Ok(font_data) => {
+                fontdb.load_font_data(font_data);
+                tracing::debug!("Loaded AtkinsonHyperlegibleMono-Regular.ttf");
+            }
+            Err(e) => tracing::warn!("Failed to load regular font: {}", e),
         }
-        if let Ok(font_data) = std::fs::read(font_dir.join("AtkinsonHyperlegibleMono-Bold.ttf")) {
-            fontdb.load_font_data(font_data);
+
+        match std::fs::read(&bold_path) {
+            Ok(font_data) => {
+                fontdb.load_font_data(font_data);
+                tracing::debug!("Loaded AtkinsonHyperlegibleMono-Bold.ttf");
+            }
+            Err(e) => tracing::warn!("Failed to load bold font: {}", e),
         }
+    } else {
+        tracing::warn!("Font directory .cache/fonts does not exist, using system fonts only");
     }
 
     let mut opt = usvg::Options::default();
@@ -1352,8 +1363,10 @@ async fn handle_og_image(Path(SchemePath { scheme }): Path<SchemePath>) -> Respo
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to encode PNG").into_response(),
     };
 
-    // Cache the result
-    let _ = std::fs::write(&cache_path, &png_data);
+    // Cache the result if cache is available
+    if cache_available {
+        let _ = std::fs::write(&cache_path, &png_data);
+    }
 
     Response::builder()
         .header("content-type", "image/png")

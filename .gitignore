@@ -27,4 +27,7 @@ Thumbs.db
 data/schemes/
 data/templates/
 
+# Cache generated files (but keep .gitkeep and fonts)
+.cache/og/*.png
+
 result

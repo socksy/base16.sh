@@ -144,6 +144,7 @@
             mkdir -p $out/share/base16-server
             cp -r data $out/share/base16-server/
             cp -r templates $out/share/base16-server/
+            cp -r .cache $out/share/base16-server/
           '';
         };
       });
