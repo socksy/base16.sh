@@ -1147,6 +1147,16 @@ async fn handle_robots() -> Response {
         .unwrap()
 }
 
+async fn handle_favicon() -> Response {
+    let svg = include_str!("../favicon.svg");
+
+    Response::builder()
+        .header("content-type", "image/svg+xml")
+        .header("cache-control", "public, max-age=31536000")
+        .body(Body::from(svg))
+        .unwrap()
+}
+
 async fn handle_llms_txt() -> Response {
     let llms_txt = format!(
         r#"# base16.sh - Base16/Base24 Color Scheme Distribution
@@ -1384,6 +1394,7 @@ fn create_app() -> Router {
         .route("/sitemap.xml", get(handle_sitemap))
         .route("/robots.txt", get(handle_robots))
         .route("/llms.txt", get(handle_llms_txt))
+        .route("/favicon.svg", get(handle_favicon))
         .route("/og/{scheme}", get(handle_og_image))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))
