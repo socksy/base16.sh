@@ -432,6 +432,8 @@ struct SchemeYaml {
     system: String,
     name: String,
     author: String,
+    #[serde(default)]
+    slug: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     variant: String,
     palette: HashMap<String, String>,
@@ -469,10 +471,6 @@ fn sanitize_name(name: &str) -> String {
         .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .take(255)
         .collect()
-}
-
-fn slugify(name: &str) -> String {
-    name.to_lowercase().replace(' ', "-")
 }
 
 fn get_base_description(base: &str) -> Option<&'static str> {
@@ -697,11 +695,11 @@ async fn handle_scheme(
 
         // Get templates compatible with this scheme's system
         let templates = TEMPLATE_INDEX.templates_for_system(&scheme_info.system);
-        let slug = slugify(&scheme_data.name);
+        let slug = scheme_data.slug.as_deref().unwrap_or(&scheme_info.name);
 
         let mut data = MapBuilder::new()
             .insert_str("scheme-name", &scheme_data.name)
-            .insert_str("scheme-slug", &slug)
+            .insert_str("scheme-slug", slug)
             .insert_str("scheme-author", &scheme_data.author)
             .insert_str("scheme-system", &scheme_info.system)
             .insert_str("palette-svg", &palette_svg)
@@ -711,7 +709,7 @@ async fn handle_scheme(
                 for template in &templates {
                     vec = vec.push_map(|map| {
                         map.insert_str("name", &template.name)
-                           .insert_str("filename", template.download_filename(&slug))
+                           .insert_str("filename", template.download_filename(slug))
                            .insert_str("url", format!("/{}/{}", scheme_info.name, template.name))
                     });
                 }
@@ -1000,13 +998,13 @@ async fn handle_scheme_template(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to compile template").into_response(),
     };
 
-    let slug = slugify(&scheme_data.name);
+    let slug = scheme_data.slug.as_deref().unwrap_or(&scheme_info.name);
     let slug_underscored = slug.replace('-', "_");
 
     let mut data = MapBuilder::new()
         .insert_str("scheme-name", &scheme_data.name)
         .insert_str("scheme-author", &scheme_data.author)
-        .insert_str("scheme-slug", &slug)
+        .insert_str("scheme-slug", slug)
         .insert_str("scheme-slug-underscored", &slug_underscored)
         .insert_str("scheme-system", &scheme_info.system);
 
@@ -1148,12 +1146,50 @@ async fn handle_robots() -> Response {
 }
 
 async fn handle_favicon() -> Response {
-    let svg = include_str!("../favicon.svg");
+    let scheme_info = SCHEME_INDEX.find_exact("catppuccin-macchiato").unwrap();
+    let scheme_yaml_str = std::fs::read_to_string(&scheme_info.path).unwrap();
+    let scheme_data: SchemeYaml = serde_yaml::from_str(&scheme_yaml_str).unwrap();
 
     Response::builder()
         .header("content-type", "image/svg+xml")
         .header("cache-control", "public, max-age=31536000")
-        .body(Body::from(svg))
+        .body(Body::from(build_favicon_svg(&scheme_data)))
+        .unwrap()
+}
+
+fn build_favicon_svg(scheme_data: &SchemeYaml) -> String {
+    let color_keys = [
+        "base00", "base01", "base02", "base03",
+        "base04", "base05", "base06", "base07",
+        "base08", "base09", "base0A", "base0B",
+        "base0C", "base0D", "base0E", "base0F",
+    ];
+
+    let mut svg = String::from(r#"<svg viewBox="0 0 4 4" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">"#);
+
+    for (i, key) in color_keys.iter().enumerate() {
+        let color = scheme_data.palette.get(*key)
+            .or_else(|| scheme_data.palette.get(&key.to_lowercase()))
+            .map(|s| s.as_str())
+            .unwrap_or("#000000");
+        let x = i % 4;
+        let y = i / 4;
+        svg.push_str(&format!(r#"<rect x="{}" y="{}" width="1" height="1" fill="{}"/>"#, x, y, color));
+    }
+
+    svg.push_str("</svg>");
+    svg
+}
+
+async fn handle_scheme_favicon(Path(SchemePath { scheme }): Path<SchemePath>) -> Response {
+    let scheme_info = SCHEME_INDEX.find_exact(&scheme).unwrap();
+    let scheme_yaml_str = std::fs::read_to_string(&scheme_info.path).unwrap();
+    let scheme_data: SchemeYaml = serde_yaml::from_str(&scheme_yaml_str).unwrap();
+
+    Response::builder()
+        .header("content-type", "image/svg+xml")
+        .header("cache-control", "public, max-age=31536000, immutable")
+        .body(Body::from(build_favicon_svg(&scheme_data)))
         .unwrap()
 }
 
@@ -1249,12 +1285,7 @@ fn build_og_image_svg(scheme_data: &SchemeYaml, scheme_name: &str, _scheme_autho
     // Replace each Dracula color with the scheme's actual color
     for (dracula_hex, base_key) in dracula_colors {
         if let Some(scheme_color) = scheme_data.palette.get(base_key) {
-            let scheme_hex = if scheme_color.starts_with('#') {
-                scheme_color.clone()
-            } else {
-                format!("#{}", scheme_color)
-            };
-            svg = svg.replace(dracula_hex, &scheme_hex);
+            svg = svg.replace(dracula_hex, scheme_color);
         }
     }
 
@@ -1268,12 +1299,7 @@ fn build_og_image_svg(scheme_data: &SchemeYaml, scheme_name: &str, _scheme_autho
 
         for (default_hex, base_key) in base24_defaults {
             if let Some(scheme_color) = scheme_data.palette.get(base_key) {
-                let scheme_hex = if scheme_color.starts_with('#') {
-                    scheme_color.clone()
-                } else {
-                    format!("#{}", scheme_color)
-                };
-                svg = svg.replace(default_hex, &scheme_hex);
+                svg = svg.replace(default_hex, scheme_color);
             }
         }
     }
@@ -1395,7 +1421,9 @@ fn create_app() -> Router {
         .route("/robots.txt", get(handle_robots))
         .route("/llms.txt", get(handle_llms_txt))
         .route("/favicon.svg", get(handle_favicon))
+        .route("/favicon.ico", get(handle_favicon))
         .route("/og/{scheme}", get(handle_og_image))
+        .route("/{scheme}/favicon.svg", get(handle_scheme_favicon))
         .route("/{scheme}/{template}", get(handle_scheme_template))
         .route("/{scheme}", get(handle_scheme))
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -1508,13 +1536,6 @@ mod tests {
         assert_eq!(sanitize_name("hello world"), "helloworld");
         assert_eq!(sanitize_name("hello<script>"), "helloscript");
         assert_eq!(sanitize_name("../../../etc/passwd"), "etcpasswd");
-    }
-
-    #[test]
-    fn test_slugify() {
-        assert_eq!(slugify("Monokai"), "monokai");
-        assert_eq!(slugify("Gruvbox Dark"), "gruvbox-dark");
-        assert_eq!(slugify("One Light"), "one-light");
     }
 
     #[test]
